@@ -1,0 +1,7 @@
+Device NRF52840_XXAA
+Speed 4000
+SelectInterface SWD
+Connect
+Loadfile build/nrf52840.hex
+Reset
+Exit
