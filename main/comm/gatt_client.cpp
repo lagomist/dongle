@@ -10,7 +10,6 @@
 #include "ble_srv_common.h"
 #include "nrf_ble_scan.h"
 #include "nrf_ble_gatt.h"
-#include "app_timer.h"
 #include "app_error.h"
 #include <vector>
 #include <cstdint>
@@ -117,7 +116,7 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
             APP_ERROR_CHECK(err_code);
 
             // Resume scanning.
-            scan_start();
+            // scan_start();
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
@@ -237,7 +236,9 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
 
         case NRF_BLE_SCAN_EVT_SCAN_TIMEOUT: {
             NRF_LOG_WARNING("Scan timed out.");
-            scan_start();
+            if (_profile.evt_handler) {
+                _profile.evt_handler(SCAN_TIMEOUT_EVT, 0);
+            }
             break;
         }
         default: break;
@@ -284,18 +285,27 @@ int notif_enable() {
     return notif_config(_profile.characteristic.cccd_handle, true);
 }
 
-void scan_start() {
+void scan_start(uint16_t timeout_ms) {
+    ble_gap_scan_params_t params = {
+        .active        = 0x01,
+        .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,
+        .scan_phys     = BLE_GAP_PHY_1MBPS,
+        .interval      = APP_BLE_SCAN_INTERVAL,
+        .window        = APP_BLE_SCAN_WINDOW,
+        .timeout       = (uint16_t )(timeout_ms / 10),
+    };
+    nrf_ble_scan_params_set(&_scan_inst, &params);
     nrf_ble_scan_start(&_scan_inst);
 }
 
-std::vector<uint8_t> adv_data_prase(uint8_t type, uint8_t adv_data[], uint8_t adv_len) {
+std::vector<uint8_t> adv_data_prase(uint8_t type, const uint8_t adv_data[], uint8_t adv_len) {
     uint8_t index = 0;
     while (index < adv_len) {
         uint8_t field_length = adv_data[index];
         uint8_t field_type = adv_data[index + 1];
 
         if(field_type == type) {
-            uint8_t *buf = &adv_data[index + 2];
+            const uint8_t *buf = &adv_data[index + 2];
             uint8_t len = field_length - 1; 
 					
             return std::vector<uint8_t>(buf, buf + len);
@@ -306,17 +316,17 @@ std::vector<uint8_t> adv_data_prase(uint8_t type, uint8_t adv_data[], uint8_t ad
     return {};
 }
 
-std::string_view get_scan_adv_name(uint8_t adv_data[], uint8_t adv_len) {
+std::string_view get_scan_adv_name(const uint8_t adv_data[], uint8_t adv_len) {
     std::vector<uint8_t> res = adv_data_prase(BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME, adv_data, adv_len);
     if (res.empty()) {
         res = adv_data_prase(BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME, adv_data, adv_len);
         if (res.empty())
             return {};
     }
+    res.push_back('\0');
     return {(char *)res.data(), res.size()};
 }
 
-// BLE发送数据
 int send(uint16_t char_handle, void * data, uint16_t length) {
     nrf_ble_gq_req_t write_req;
     memset(&write_req, 0, sizeof(nrf_ble_gq_req_t));
@@ -340,7 +350,7 @@ int send(uint16_t char_handle, void * data, uint16_t length) {
     write_req.params.gattc_write.p_value  = (uint8_t *)data;
     write_req.params.gattc_write.write_op = BLE_GATT_OP_WRITE_CMD;
     write_req.params.gattc_write.flags    = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE;
-    //执行写操作
+    // 执行写操作
     return nrf_ble_gq_item_add(&_ble_gatt_queue, &write_req, _profile.conn_handle);
 }
 
@@ -348,7 +358,6 @@ int send(void * data, uint16_t length) {
     return send(_profile.characteristic.char_handle, data, length);
 }
 
-// 分配句柄
 int register_conn_handle(uint16_t conn_handle) {
     _profile.conn_handle = conn_handle;
     return nrf_ble_gq_conn_handle_register(&_ble_gatt_queue, conn_handle);
@@ -359,7 +368,6 @@ int discovery_service(uint16_t srv_uuid) {
     ble_uuid_t    app_uuid;
     app_uuid.type = _profile.uuid_type;
     app_uuid.uuid = srv_uuid;
-    // 将GATT传输服务服务的UUID注册给DB发现模块
     return ble_db_discovery_evt_register(&app_uuid);
 }
 
@@ -433,9 +441,6 @@ static int ble_stack_init(void) {
 
 int init() {
     ret_code_t err_code;
-    // 初始化APP定时器
-    err_code = app_timer_init();
-    APP_ERROR_CHECK(err_code);
     // 初始化蓝牙协议栈
     ble_stack_init();
     err_code = nrf_ble_gatt_init(&_gatt_inst, gatt_evt_handler);
