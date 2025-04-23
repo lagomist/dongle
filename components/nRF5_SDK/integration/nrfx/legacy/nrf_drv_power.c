@@ -39,7 +39,7 @@
  */
 
 #include "sdk_common.h"
-#if NRF_MODULE_ENABLED(POWER)
+#if NRF_MODULE_ENABLED(NRFX_POWER)
 #include "nrf_drv_power.h"
 #include <nrf_drv_clock.h>
 #ifdef SOFTDEVICE_PRESENT
@@ -378,7 +378,7 @@ static void nrf_drv_power_on_sd_disable(void)
 {
     /* Reinit interrupts */
     ASSERT(m_initialized);
-    NRFX_IRQ_PRIORITY_SET(POWER_CLOCK_IRQn, CLOCK_CONFIG_IRQ_PRIORITY);
+    NRFX_IRQ_PRIORITY_SET(POWER_CLOCK_IRQn, NRFX_CLOCK_CONFIG_IRQ_PRIORITY);
     NRFX_IRQ_ENABLE(POWER_CLOCK_IRQn);
     if (nrfx_power_pof_handler_get() != NULL)
     {

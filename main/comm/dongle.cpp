@@ -1,20 +1,16 @@
 #include "gatt_client.h"
+#include "usb_cdc.h"
 #include "nrf_delay.h"
+#define NRF_LOG_MODULE_NAME Dongle
 #include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 namespace dongle {
 
-// 设备名称数组  英文名称
-static char const m_target_periph_name[] = "NRF_GATT_TEST";
-// GATT数据缓存
-static uint8_t data_buffer[544] = {0};
-// ibeacon data buffer
-static char adv_data_buf[200] = {0};
-
 static void ble_evt_callback(Wrapper::BLE::Client::EvtType evt, uint16_t handle) {
 	switch (evt) {
-	case Wrapper::BLE::Client::EvtType::DISCONNECTED_EVT:
-		/* code */
+	case Wrapper::BLE::Client::EvtType::SCAN_TIMEOUT_EVT:
+		usb_cdc::write("scan timeout");
 		break;
 	
 	default:
@@ -30,9 +26,10 @@ static void scan_callback(const uint8_t *adv_data, uint8_t adv_len) {
 }
 
 int init() {
+	usb_cdc::enable();
 	Wrapper::BLE::Client::register_evt_callback(ble_evt_callback);
 	Wrapper::BLE::Client::register_scan_callback(scan_callback);
-	Wrapper::BLE::Client::scan_start(5000);
+	Wrapper::BLE::Client::scan_start(10000);
 	return 0;
 }
 

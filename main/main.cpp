@@ -1,6 +1,7 @@
 #include "timer.h"
 #include "led.h"
 #include "gatt_client.h"
+#include "usb_cdc.h"
 #include "dongle.h"
 
 #include "nrf_log.h"
@@ -19,15 +20,17 @@ static void poweron_init(void) {
 
 extern "C" int main(void) {
 	poweron_init();
-	Wrapper::BLE::Client::init();
 
 	Wrapper::AppTimer::init();
+	usb_cdc::init();
+	Wrapper::BLE::Client::init();
+
 	RuningStatus::init();
 	dongle::init();
 
-
 	NRF_LOG_INFO("enter slice processing ...");
 	while(true)	{
+		usb_cdc::process();
 		Wrapper::AppTimer::sliceProcess();
 	}
 }

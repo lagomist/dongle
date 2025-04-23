@@ -28,23 +28,28 @@ SRC_FILES += \
 	$(SDK_ROOT)/components/libraries/util/app_error.c \
 	$(SDK_ROOT)/components/libraries/util/app_error_handler_gcc.c \
 	$(SDK_ROOT)/components/libraries/util/app_error_weak.c \
-	$(SDK_ROOT)/components/libraries/fifo/app_fifo.c \
-	$(SDK_ROOT)/components/libraries/scheduler/app_scheduler.c \
 	$(SDK_ROOT)/components/libraries/util/app_util_platform.c \
-	$(SDK_ROOT)/components/libraries/experimental_section_vars/nrf_section_iter.c \
 	$(SDK_ROOT)/components/libraries/util/nrf_assert.c \
+	$(SDK_ROOT)/components/libraries/experimental_section_vars/nrf_section_iter.c \
 	$(SDK_ROOT)/components/libraries/atomic_fifo/nrf_atfifo.c \
 	$(SDK_ROOT)/components/libraries/atomic_flags/nrf_atflags.c \
 	$(SDK_ROOT)/components/libraries/atomic/nrf_atomic.c \
 	$(SDK_ROOT)/components/libraries/balloc/nrf_balloc.c \
-	$(SDK_ROOT)/external/fprintf/nrf_fprintf.c \
-	$(SDK_ROOT)/external/fprintf/nrf_fprintf_format.c \
+	$(SDK_ROOT)/components/libraries/queue/nrf_queue.c \
 	$(SDK_ROOT)/components/libraries/memobj/nrf_memobj.c \
 	$(SDK_ROOT)/components/libraries/ringbuf/nrf_ringbuf.c \
 	$(SDK_ROOT)/components/libraries/sortlist/nrf_sortlist.c \
 	$(SDK_ROOT)/components/libraries/strerror/nrf_strerror.c \
+	$(SDK_ROOT)/components/libraries/usbd/class/cdc/acm/app_usbd_cdc_acm.c \
+	$(SDK_ROOT)/components/libraries/usbd/app_usbd_string_desc.c \
+	$(SDK_ROOT)/components/libraries/usbd/app_usbd_serial_num.c \
+	$(SDK_ROOT)/components/libraries/usbd/app_usbd_core.c \
+	$(SDK_ROOT)/components/libraries/usbd/app_usbd.c \
 	$(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
 	$(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
+	$(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
+	$(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_power.c \
+	$(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
 	$(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
 	$(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_usbd.c \
 	$(SDK_ROOT)/modules/nrfx/drivers/src/prs/nrfx_prs.c \
@@ -54,15 +59,16 @@ SRC_FILES += \
 	$(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
 	$(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
 	$(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
+	$(SDK_ROOT)/external/fprintf/nrf_fprintf.c \
+	$(SDK_ROOT)/external/fprintf/nrf_fprintf_format.c \
 	$(SDK_ROOT)/components/ble/common/ble_advdata.c \
-	$(SDK_ROOT)/components/ble/ble_advertising/ble_advertising.c \
+	$(SDK_ROOT)/components/ble/common/ble_srv_common.c \
 	$(SDK_ROOT)/components/ble/common/ble_conn_params.c \
 	$(SDK_ROOT)/components/ble/common/ble_conn_state.c \
 	$(SDK_ROOT)/components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c \
-	$(SDK_ROOT)/components/ble/common/ble_srv_common.c \
+	$(SDK_ROOT)/components/ble/ble_advertising/ble_advertising.c \
 	$(SDK_ROOT)/components/ble/nrf_ble_gatt/nrf_ble_gatt.c \
 	$(SDK_ROOT)/components/ble/nrf_ble_qwr/nrf_ble_qwr.c \
-	$(SDK_ROOT)/components/libraries/queue/nrf_queue.c \
 	$(SDK_ROOT)/components/ble/nrf_ble_gq/nrf_ble_gq.c\
 	$(SDK_ROOT)/components/ble/nrf_ble_scan/nrf_ble_scan.c \
 	$(SDK_ROOT)/components/ble/ble_db_discovery/ble_db_discovery.c \
@@ -74,54 +80,49 @@ SRC_FILES += \
 # Include folders common to all targets
 INC_FOLDERS += \
 	-Imain/config \
-	-I$(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \
 	-I$(SDK_ROOT)/modules/nrfx/hal \
+	-I$(SDK_ROOT)/modules/nrfx/drivers/include \
+	-I$(SDK_ROOT)/modules/nrfx \
+	-I$(SDK_ROOT)/modules/nrfx/mdk \
 	-I$(SDK_ROOT)/integration/nrfx \
 	-I$(SDK_ROOT)/integration/nrfx/legacy \
+	-I$(SDK_ROOT)/components \
+	-I$(SDK_ROOT)/components/toolchain/cmsis/include \
 	-I$(SDK_ROOT)/components/libraries/log \
 	-I$(SDK_ROOT)/components/libraries/experimental_section_vars \
-	-I$(SDK_ROOT)/components/libraries/bootloader/ble_dfu \
 	-I$(SDK_ROOT)/components/libraries/fifo \
 	-I$(SDK_ROOT)/components/libraries/atomic_fifo \
-	-I$(SDK_ROOT)/components/ble/ble_advertising \
-	-I$(SDK_ROOT)/modules/nrfx/drivers/include \
-	-I$(SDK_ROOT)/components/softdevice/s140/headers/nrf52 \
-	-I$(SDK_ROOT)/components/softdevice/s140/headers \
-	-I$(SDK_ROOT)/components/softdevice/common \
-	-I$(SDK_ROOT)/components/libraries/queue \
-	-I$(SDK_ROOT)/components/ble/ble_dtm \
-	-I$(SDK_ROOT)/components/toolchain/cmsis/include \
-	-I$(SDK_ROOT)/components/ble/common \
+	-I$(SDK_ROOT)/components/libraries/log/src \
+	-I$(SDK_ROOT)/components/libraries/ringbuf \
 	-I$(SDK_ROOT)/components/libraries/delay \
 	-I$(SDK_ROOT)/components/libraries/memobj \
 	-I$(SDK_ROOT)/components/libraries/atomic \
-	-I$(SDK_ROOT)/components \
 	-I$(SDK_ROOT)/components/libraries/crc16 \
 	-I$(SDK_ROOT)/components/libraries/util \
+	-I$(SDK_ROOT)/components/libraries/queue \
+	-I$(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \
 	-I$(SDK_ROOT)/components/libraries/usbd/class/cdc \
 	-I$(SDK_ROOT)/components/libraries/usbd \
 	-I$(SDK_ROOT)/components/libraries/balloc \
 	-I$(SDK_ROOT)/components/libraries/sortlist \
-	-I$(SDK_ROOT)/modules/nrfx/mdk \
-	-I$(SDK_ROOT)/components/ble/ble_link_ctx_manager \
-	-I$(SDK_ROOT)/components/ble/ble_services/ble_nus \
-	-I$(SDK_ROOT)/components/ble/ble_services/ble_hids \
 	-I$(SDK_ROOT)/components/libraries/strerror \
+	-I$(SDK_ROOT)/components/libraries/atomic_flags \
+	-I$(SDK_ROOT)/components/softdevice/s140/headers/nrf52 \
+	-I$(SDK_ROOT)/components/softdevice/s140/headers \
+	-I$(SDK_ROOT)/components/softdevice/common \
+	-I$(SDK_ROOT)/components/ble/ble_advertising \
+	-I$(SDK_ROOT)/components/ble/ble_dtm \
+	-I$(SDK_ROOT)/components/ble/common \
+	-I$(SDK_ROOT)/components/ble/ble_link_ctx_manager \
 	-I$(SDK_ROOT)/components/ble/nrf_ble_gatt \
 	-I$(SDK_ROOT)/components/ble/nrf_ble_qwr \
-	-I$(SDK_ROOT)/external/segger_rtt \
-	-I$(SDK_ROOT)/external/fprintf \
-	-I$(SDK_ROOT)/components/libraries/atomic_flags \
 	-I$(SDK_ROOT)/components/ble/ble_racp \
-	-I$(SDK_ROOT)/components/ble/ble_services/ble_hrs \
-	-I$(SDK_ROOT)/components/ble/ble_services/ble_rscs \
-	-I$(SDK_ROOT)/components/libraries/log/src \
-	-I$(SDK_ROOT)/components/libraries/ringbuf \
-	-I$(SDK_ROOT)/modules/nrfx/drivers/include \
-	-I$(SDK_ROOT)/modules/nrfx \
 	-I$(SDK_ROOT)/components/ble/ble_db_discovery \
 	-I$(SDK_ROOT)/components/ble/nrf_ble_gq \
 	-I$(SDK_ROOT)/components/ble/nrf_ble_scan \
+	-I$(SDK_ROOT)/external/segger_rtt \
+	-I$(SDK_ROOT)/external/fprintf \
+	-I$(SDK_ROOT)/external/utf_converter \
 
 CPP_FILES += \
 	main/driver/timer.cpp \
@@ -129,6 +130,7 @@ CPP_FILES += \
 	main/periph/led.cpp \
 	main/comm/gatt_client.cpp \
 	main/comm/dongle.cpp \
+	main/comm/usb_cdc.cpp \
 	main/main.cpp \
 
 INC_FOLDERS += \
@@ -189,6 +191,7 @@ C_DEFS =  \
 	-DNRF_SD_BLE_API_VERSION=7 \
 	-DS140 \
 	-DSOFTDEVICE_PRESENT \
+	-DDEBUG \
 
 # Optimization flags
 OPT = -O0 -g3

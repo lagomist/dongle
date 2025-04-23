@@ -950,7 +950,7 @@ ret_code_t app_usbd_power_events_enable(void)
         return NRF_ERROR_INVALID_STATE;
     }
 
-    ASSERT((!APP_USBD_CONFIG_EVENT_QUEUE_ENABLE) || (USBD_CONFIG_IRQ_PRIORITY == POWER_CONFIG_IRQ_PRIORITY));
+    ASSERT((!APP_USBD_CONFIG_EVENT_QUEUE_ENABLE) || (NRFX_USBD_CONFIG_IRQ_PRIORITY == NRFX_POWER_CONFIG_IRQ_PRIORITY));
 
     ret_code_t ret;
     static const nrf_drv_power_usbevt_config_t config =
@@ -1065,7 +1065,7 @@ void app_usbd_event_execute(app_usbd_internal_evt_t const * const p_event)
      * if the library is used correctly.
      * NOTE: Higher interrupt level -> lower priority value.
      */
-    ASSERT(USBD_CONFIG_IRQ_PRIORITY <= current_int_priority_get());
+    ASSERT(NRFX_USBD_CONFIG_IRQ_PRIORITY <= current_int_priority_get());
 
     /* Note - there should never be situation that event is generated on disconnected endpoint */
     switch (p_event->type)
@@ -1103,7 +1103,8 @@ void app_usbd_event_execute(app_usbd_internal_evt_t const * const p_event)
             user_event_state_proc(APP_USBD_EVT_STOPPED);
             if (app_usbd_sustate_with_requested_hfclk(sustate_get()))
             {
-                nrf_drv_clock_hfclk_release();
+                // nrf_drv_clock_hfclk_release();
+                nrfx_clock_hfclk_stop();
             }
 
             break;

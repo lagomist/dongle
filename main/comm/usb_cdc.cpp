@@ -1,10 +1,8 @@
 
 #include "usb_cdc.h"
-
-#include "nrf_log.h"
+#include "nrfx_clock.h"
 #include "nrf_drv_usbd.h"
 #include "nrf_delay.h"
-
 #include "app_error.h"
 #include "app_util.h"
 #include "app_usbd_core.h"
@@ -14,6 +12,9 @@
 #include "app_usbd_serial_num.h"
 #include <stdint.h>
 #include <string.h>
+#define NRF_LOG_MODULE_NAME usb_cdc
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 namespace usb_cdc {
 
@@ -38,7 +39,7 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(_app_cdc_acm,
 							CDC_ACM_COMM_EPIN,
 							CDC_ACM_DATA_EPIN,
 							CDC_ACM_DATA_EPOUT,
-							APP_USBD_CDC_COMM_PROTOCOL_AT_V250);
+							APP_USBD_CDC_COMM_PROTOCOL_NONE);
 
 
 // USB CODE START
@@ -68,8 +69,9 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
 		size_t size = app_usbd_cdc_acm_rx_size(p_cdc_acm);
 		/* Fetch data until internal buffer is empty */
 		ret = app_usbd_cdc_acm_read(&_app_cdc_acm, _cdc_data_array, size);
+		_cdc_data_array[size] = '\0';
 		if (ret == NRF_SUCCESS) {
-			
+			NRF_LOG_INFO("recv: %s", _cdc_data_array);
 		}
 
 		break;
@@ -123,14 +125,22 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 // USB CODE END
 
 int write(void *data, size_t length) {
-	ret_code_t ret = app_usbd_cdc_acm_write(&_app_cdc_acm, data, length);
-	return ret;
+	return app_usbd_cdc_acm_write(&_app_cdc_acm, data, length);
+}
+
+int write(std::string_view str) {
+	return app_usbd_cdc_acm_write(&_app_cdc_acm, str.data(), str.size());
 }
 
 void process() {
 	while (app_usbd_event_queue_process());
 }
 
+/**
+ * @brief 初始化USB设备、电源（协议栈初始化之前调用）
+ * 
+ * @return int 
+ */
 int init(void) {
 	ret_code_t ret;
 	static const app_usbd_config_t usbd_config = {
@@ -146,12 +156,18 @@ int init(void) {
 	ret = app_usbd_class_append(class_cdc_acm);
 	APP_ERROR_CHECK(ret);
 
-	ret = app_usbd_power_events_enable();
-	APP_ERROR_CHECK(ret);
-
 	NRF_LOG_INFO("init success.");
 	return 0;
 }
 
+/**
+ * @brief 使能电源事件（协议栈初始化后调用）
+ * 
+ */
+void enable() {
+	ret_code_t ret = app_usbd_power_events_enable();
+	APP_ERROR_CHECK(ret);
+	NRF_LOG_INFO("enabled.");
+}
 
 }

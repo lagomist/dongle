@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <string_view>
 
-#define NRF_LOG_MODULE_NAME GATT_CLIENT
+#define NRF_LOG_MODULE_NAME gatt_client
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
@@ -285,7 +285,7 @@ int notif_enable() {
     return notif_config(_profile.characteristic.cccd_handle, true);
 }
 
-void scan_start(uint16_t timeout_ms) {
+void scan_start(uint32_t timeout_ms) {
     ble_gap_scan_params_t params = {
         .active        = 0x01,
         .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,

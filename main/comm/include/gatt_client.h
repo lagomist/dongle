@@ -40,7 +40,7 @@ int register_conn_handle(uint16_t conn_handle);
 
 int notif_config(uint16_t cccd_handle, bool notification_enable);
 int notif_enable();
-void scan_start(uint16_t timeout_ms = 0);
+void scan_start(uint32_t timeout_ms = 0);
 
 void register_evt_callback(EvtCallback cb);
 void register_scan_callback(ScanCallback cb);
