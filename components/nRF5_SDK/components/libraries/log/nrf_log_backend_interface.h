@@ -136,16 +136,16 @@ NRF_SECTION_DEF(NRF_LOG_BACKEND_SECTION_NAME, nrf_log_backend_t);
  */
 #define NRF_LOG_BACKEND_DEF(_name, _api, _p_ctx)                           \
     static nrf_log_backend_cb_t CONCAT_2(log_backend_cb_, _name) = {       \
-            .enabled = false,                                              \
+            .p_next  = NULL,                                               \
             .id      = NRF_LOG_BACKEND_INVALID_ID,                         \
-            .p_next  = NULL                                                \
+            .enabled = false,                                              \
     };                                                                     \
     NRF_SECTION_ITEM_REGISTER(NRF_LOG_BACKEND_SUBSECTION_NAME(_name),      \
           static const nrf_log_backend_t _name) = {                        \
             .p_api = &_api,                                                \
             .p_ctx = _p_ctx,                                               \
+            .p_name = (char *)STRINGIFY(_name),                            \
             .p_cb = &CONCAT_2(log_backend_cb_, _name),                     \
-            .p_name = (char *)STRINGIFY(_name)                             \
    }
 
 

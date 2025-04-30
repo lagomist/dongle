@@ -4327,7 +4327,7 @@
 // <7=> 7 
 
 #ifndef NRFX_USBD_CONFIG_IRQ_PRIORITY
-#define NRFX_USBD_CONFIG_IRQ_PRIORITY 2
+#define NRFX_USBD_CONFIG_IRQ_PRIORITY 6
 #endif
 
 // <o> NRFX_USBD_CONFIG_DMASCHEDULER_MODE  - USBD DMA scheduler working scheme
@@ -4759,7 +4759,7 @@
 // <i> Functions that modify USBD state are functions for sleep, wakeup, start, stop, enable, and disable.
 //==========================================================
 #ifndef APP_USBD_CONFIG_EVENT_QUEUE_ENABLE
-#define APP_USBD_CONFIG_EVENT_QUEUE_ENABLE 1
+#define APP_USBD_CONFIG_EVENT_QUEUE_ENABLE 0
 #endif
 // <o> APP_USBD_CONFIG_EVENT_QUEUE_SIZE - The size of the event queue.  <16-64> 
 
@@ -5892,7 +5892,7 @@
  
 
 #ifndef NRF_CLI_ENABLED
-#define NRF_CLI_ENABLED 0
+#define NRF_CLI_ENABLED 1
 #endif
 
 // <o> NRF_CLI_ARGC_MAX - Maximum number of parameters passed to the command handler. 
@@ -5981,6 +5981,44 @@
 
 #ifndef NRF_CLI_USES_TASK_MANAGER_ENABLED
 #define NRF_CLI_USES_TASK_MANAGER_ENABLED 0
+#endif
+
+// </h> 
+//==========================================================
+
+// <h> nrf_cli_cdc_acm - CDC ACM command line interface transport
+
+//==========================================================
+// <q> NRF_CLI_CDC_ACM_ENABLED  - Enable/disable the CLI CDC ACM module.
+ 
+
+#ifndef NRF_CLI_CDC_ACM_ENABLED
+#define NRF_CLI_CDC_ACM_ENABLED 1
+#endif
+
+// <o> NRF_CLI_CDC_ACM_COMM_INTERFACE - COMM interface number. 
+#ifndef NRF_CLI_CDC_ACM_COMM_INTERFACE
+#define NRF_CLI_CDC_ACM_COMM_INTERFACE 0
+#endif
+
+// <s> NRF_CLI_CDC_ACM_COMM_EPIN - COMM IN endpoint number.
+#ifndef NRF_CLI_CDC_ACM_COMM_EPIN
+#define NRF_CLI_CDC_ACM_COMM_EPIN NRF_DRV_USBD_EPIN2
+#endif
+
+// <o> NRF_CLI_CDC_ACM_DATA_INTERFACE - DATA interface number. 
+#ifndef NRF_CLI_CDC_ACM_DATA_INTERFACE
+#define NRF_CLI_CDC_ACM_DATA_INTERFACE 1
+#endif
+
+// <s> NRF_CLI_CDC_ACM_DATA_EPIN - DATA IN endpoint number.
+#ifndef NRF_CLI_CDC_ACM_DATA_EPIN
+#define NRF_CLI_CDC_ACM_DATA_EPIN NRF_DRV_USBD_EPIN1
+#endif
+
+// <s> NRF_CLI_CDC_ACM_DATA_EPOUT - DATA OUT endpoint number.
+#ifndef NRF_CLI_CDC_ACM_DATA_EPOUT
+#define NRF_CLI_CDC_ACM_DATA_EPOUT NRF_DRV_USBD_EPOUT1
 #endif
 
 // </h> 
@@ -6212,11 +6250,11 @@
 // <i> Function for getting the timestamp is provided by the user
 //==========================================================
 #ifndef NRF_LOG_USES_TIMESTAMP
-#define NRF_LOG_USES_TIMESTAMP 0
+#define NRF_LOG_USES_TIMESTAMP 1
 #endif
 // <o> NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY - Default frequency of the timestamp (in Hz) or 0 to use app_timer frequency. 
 #ifndef NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY
-#define NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY 0
+#define NRF_LOG_TIMESTAMP_DEFAULT_FREQUENCY 1000
 #endif
 
 // </e>

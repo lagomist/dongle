@@ -45,6 +45,8 @@ SRC_FILES += \
 	$(SDK_ROOT)/components/libraries/usbd/app_usbd_serial_num.c \
 	$(SDK_ROOT)/components/libraries/usbd/app_usbd_core.c \
 	$(SDK_ROOT)/components/libraries/usbd/app_usbd.c \
+	$(SDK_ROOT)/components/libraries/cli/cdc_acm/nrf_cli_cdc_acm.c \
+	$(SDK_ROOT)/components/libraries/cli/nrf_cli.c \
 	$(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
 	$(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
 	$(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
@@ -103,6 +105,8 @@ INC_FOLDERS += \
 	-I$(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \
 	-I$(SDK_ROOT)/components/libraries/usbd/class/cdc \
 	-I$(SDK_ROOT)/components/libraries/usbd \
+	-I$(SDK_ROOT)/components/libraries/cli/cdc_acm \
+	-I$(SDK_ROOT)/components/libraries/cli \
 	-I$(SDK_ROOT)/components/libraries/balloc \
 	-I$(SDK_ROOT)/components/libraries/sortlist \
 	-I$(SDK_ROOT)/components/libraries/strerror \
@@ -130,7 +134,8 @@ CPP_FILES += \
 	main/periph/led.cpp \
 	main/comm/gatt_client.cpp \
 	main/comm/dongle.cpp \
-	main/comm/usb_cdc.cpp \
+	main/comm/usb_cli.cpp \
+	main/misc/cmds.cpp \
 	main/main.cpp \
 
 INC_FOLDERS += \
@@ -182,9 +187,6 @@ AS_DEFS = -x assembler-with-cpp
 
 # C defines
 C_DEFS =  \
-	-DAPP_TIMER_V2 \
-	-DAPP_TIMER_V2_RTC1_ENABLED \
-	-DBOARD_PCA10056 \
 	-DCONFIG_GPIO_AS_PINRESET \
 	-DFLOAT_ABI_HARD \
 	-DNRF52840_XXAA \
@@ -192,6 +194,7 @@ C_DEFS =  \
 	-DS140 \
 	-DSOFTDEVICE_PRESENT \
 	-DDEBUG \
+	-DDEBUG_NRF_USER
 
 # Optimization flags
 OPT = -O0 -g3

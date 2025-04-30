@@ -1,10 +1,13 @@
 #include "timer.h"
 
 #include "nrf_sdh.h"
-#include "nrfx_clock.h"
+#include "nrf_drv_clock.h"
 #include "app_error.h"
 #include "sdk_errors.h"
 #include "nrfx_rtc.h"
+#define NRF_LOG_MODULE_NAME AppTimer
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 #include <cstdlib>
 
 namespace Wrapper {
@@ -27,7 +30,7 @@ struct InstanceList {
 
 static const nrfx_rtc_t _rtc = NRFX_RTC_INSTANCE(2);
 static InstanceList * _inst_head = nullptr;
-
+static volatile uint32_t _timer_tick = 0;
 
 static InstanceList* add_slice_instance(SliceInstance &inst) {  
     InstanceList *new_inst = (InstanceList* )malloc(sizeof(InstanceList));  
@@ -61,7 +64,7 @@ static void delete_slice_instance(InstanceList *inst) {
             } else {
                 prev->next = current->next;
             }
-            delete (current);
+            free(current);
             break;
         }
         prev = current;
@@ -77,6 +80,7 @@ static void timer_callback_handler(nrfx_rtc_int_type_t event_type) {
             inst->content.tick += TICK_PERIOD_MS;
         }
     }
+    _timer_tick++;
 }
 
 // timer task process call from main
@@ -124,70 +128,152 @@ int Task::create(Action task, uint32_t period, uint32_t param, int count) {
 	return 0;
 }
 
-uint32_t Task::control(Cmd cmd, uint32_t param) {
-    if (_handle == nullptr) {
-        return -1;
-    }
+void Task::activate() {
+    if (_handle == nullptr) return;
     InstanceList *handle = (InstanceList *)_handle;
-    
-    switch(cmd) {
-        case Cmd::PAUSE: {
-            handle->content.active = 0;
-            break;
-        }
-        case Cmd::RESUME: {
-            handle->content.active = 1;
-            break;
-        }
-        case Cmd::KILL: {
-            handle->content.active = 0;
-            delete_slice_instance(handle);
-            _handle = nullptr;
-            break;
-        }
-        case Cmd::PERIOD: {
-            handle->content.period = param;
-            handle->content.tick = param;
-            break;
-        }
-        case Cmd::PARAM: {
-            handle->content.param = param;
-            break;
-        }
-        case Cmd::COUNT: {
-            handle->content.count = param;
-            handle->content.active = 1;
-            break;
-        }
-        case Cmd::RESTART: {
-            handle->content.tick = handle->content.period;
-            handle->content.active = 1;
-            break;
-        }
-        case Cmd::ACTIVATED:  
-            return handle->content.active;
-        case Cmd::REMAINING:
-            return handle->content.tick * TICK_PERIOD_MS;
-        default: break;
-    }
-    return -1;
+    handle->content.active = 1;
 }
 
-static void clock_irq_handler(nrfx_clock_evt_type_t evt) {
-    if (evt == NRFX_CLOCK_EVT_HFCLK_STARTED) {
-    }
-    if (evt == NRFX_CLOCK_EVT_LFCLK_STARTED) {
-    }
+void Task::suspend() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.active = 0;
 }
+
+void Task::restart() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.tick = handle->content.period;
+    handle->content.active = 1;
+}
+
+void Task::kill() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.active = 0;
+    delete_slice_instance(handle);
+    _handle = nullptr;
+}
+
+void Task::setPeriod(uint32_t period) {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.period = period;
+    handle->content.tick = period;
+}
+
+void Task::setParam(uint32_t param) {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.param = param;
+}
+
+void Task::setCycleCount(uint32_t count) {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.count = count;
+    handle->content.active = 1;
+}
+bool Task::isActivated() {
+    if (_handle == nullptr) return false;
+    InstanceList *handle = (InstanceList *)_handle;
+    return handle->content.active;
+}
+
+uint32_t Task::getRemainingTime() {
+    if (_handle == nullptr) return -1;
+    InstanceList *handle = (InstanceList *)_handle;
+    return handle->content.tick * TICK_PERIOD_MS;
+}
+
+
+
+Timer::Timer(Action cb, uint32_t period, uint32_t param, int count) {
+    create(cb, period, param, count);
+}
+
+int Timer::create(Action cb, uint32_t period, uint32_t param, int count) {
+    SliceInstance inst = {
+        .action = cb,
+        .param  = param,
+        .count  = count,
+        .period = period,
+        .tick   = 0,
+        .active = 1,
+    };
+
+    InstanceList *handle = add_slice_instance(inst);
+    if (handle == nullptr) {
+        return -1;
+    }
+    _handle = handle;
+    return 0;
+}
+
+void Timer::start() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.active = 1;
+}
+
+void Timer::restart() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.tick = 0;
+    handle->content.active = 1;
+}
+
+void Timer::stop() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.active = 0;
+}
+
+void Timer::kill() {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.active = 0;
+    delete_slice_instance(handle);
+    _handle = nullptr;
+}
+
+void Timer::setPeriod(uint32_t period) {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.period = period;
+    handle->content.tick = 0;
+}
+
+void Timer::setCycleCount(uint32_t count) {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.count = count;
+    handle->content.active = 1;
+    handle->content.tick = 0;
+}
+
+bool Timer::isRuning() {
+    if (_handle == nullptr) return false;
+    InstanceList *handle = (InstanceList *)_handle;
+    return handle->content.active;
+}
+
+uint32_t Timer::getRemainingTime() {
+    if (_handle == nullptr) return -1;
+    InstanceList *handle = (InstanceList *)_handle;
+    return handle->content.tick * TICK_PERIOD_MS;
+}
+
+uint32_t getTick() {
+    return _timer_tick;
+}
+
 
 void init(void) {
 	/* use the RTC timer */
-    if (nrfx_clock_init(clock_irq_handler) == NRFX_SUCCESS) {
-        if (!nrf_sdh_is_enabled()) {
-            nrfx_clock_enable();
-            nrfx_clock_lfclk_start();
-        }
-    }
+    ret_code_t err_code = nrf_drv_clock_init();
+    APP_ERROR_CHECK(err_code);
+    nrf_drv_clock_lfclk_request(NULL);
 
 	nrfx_rtc_config_t config = {
 		/* 1 / (32768/33) = 1ms */
@@ -198,11 +284,12 @@ void init(void) {
 	};
 	
 	// use RTC2 write in struct and interrupt function
-	ret_code_t err_code = nrfx_rtc_init(&_rtc, &config, timer_callback_handler);
+	err_code = nrfx_rtc_init(&_rtc, &config, timer_callback_handler);
 	APP_ERROR_CHECK(err_code);
 	// enable RTC interrupt handle
 	nrfx_rtc_tick_enable(&_rtc, true);
 	nrfx_rtc_enable(&_rtc);
+    NRF_LOG_INFO("init success.");
 }
 
 }

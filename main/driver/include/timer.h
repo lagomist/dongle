@@ -14,32 +14,48 @@ using Action = void(*)(uint32_t);
 
 class Task {
 public:
-
-	enum class Cmd : uint8_t {
-		PAUSE = 1,
-		RESUME,
-		KILL,
-		PERIOD,
-		PARAM,
-		COUNT,
-		RESTART,
-		ACTIVATED,
-		REMAINING,
-	};
-
 	Task() {}
 	Task(Action task, uint32_t period, uint32_t param = 0, int count = LOOP_FOREVER);
 
 	int create(Action task, uint32_t period, uint32_t param = 0, int count = LOOP_FOREVER);
-	uint32_t control(Cmd cmd, uint32_t param = 0);
+
+	void activate();
+	void suspend();
+	void restart();
+	void kill();
+	void setPeriod(uint32_t period);
+	void setParam(uint32_t param);
+	void setCycleCount(uint32_t count);
+	bool isActivated();
+	uint32_t getRemainingTime();
 
 private:
 	void * _handle = nullptr;
 };
 
 
-void init();
+class Timer {
+public:
+	Timer() {}
+	Timer(Action cb, uint32_t period, uint32_t param = 0, int count = LOOP_FOREVER);
+
+	int create(Action cb, uint32_t period, uint32_t param = 0, int count = LOOP_FOREVER);
+
+	void start();
+	void restart();
+	void stop();
+	void kill();
+	void setPeriod(uint32_t period);
+	void setCycleCount(uint32_t count);
+	bool isRuning();
+	uint32_t getRemainingTime();
+private:
+	void * _handle = nullptr;
+};
+
+uint32_t getTick();
 void sliceProcess();
+void init();
 
 }
 

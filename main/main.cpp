@@ -1,7 +1,7 @@
 #include "timer.h"
 #include "led.h"
 #include "gatt_client.h"
-#include "usb_cdc.h"
+#include "usb_cli.h"
 #include "dongle.h"
 
 #include "nrf_log.h"
@@ -9,7 +9,7 @@
 #include "nrf_log_default_backends.h"
 
 static void poweron_init(void) {
-	ret_code_t err_code = NRF_LOG_INIT(NULL);
+	ret_code_t err_code = NRF_LOG_INIT(Wrapper::AppTimer::getTick);
     APP_ERROR_CHECK(err_code);
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 
@@ -22,7 +22,7 @@ extern "C" int main(void) {
 	poweron_init();
 
 	Wrapper::AppTimer::init();
-	usb_cdc::init();
+	usb_cli::init();
 	Wrapper::BLE::Client::init();
 
 	RuningStatus::init();
@@ -30,7 +30,6 @@ extern "C" int main(void) {
 
 	NRF_LOG_INFO("enter slice processing ...");
 	while(true)	{
-		usb_cdc::process();
 		Wrapper::AppTimer::sliceProcess();
 	}
 }
