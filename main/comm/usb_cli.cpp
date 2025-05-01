@@ -69,9 +69,9 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 }
 
 
-int write(const void *data, size_t length) {
+int write(const char data[], size_t length) {
 	if (!_usb_connected) return -1;
-	nrf_cli_print_stream(&_usb_cdc_cli, (const char*)data, length);
+	nrf_cli_print_stream(&_usb_cdc_cli, data, length);
 	return 0;
 }
 

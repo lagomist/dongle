@@ -37,9 +37,9 @@ private:
 class Timer {
 public:
 	Timer() {}
-	Timer(Action cb, uint32_t period, uint32_t param = 0, int count = LOOP_FOREVER);
+	Timer(Action cb, uint32_t period, uint32_t param = 0, int count = 1);
 
-	int create(Action cb, uint32_t period, uint32_t param = 0, int count = LOOP_FOREVER);
+	int create(Action cb, uint32_t period, uint32_t param = 0, int count = 1);
 
 	void start();
 	void restart();
@@ -51,6 +51,7 @@ public:
 	uint32_t getRemainingTime();
 private:
 	void * _handle = nullptr;
+	uint32_t _cycle_count;
 };
 
 uint32_t getTick();

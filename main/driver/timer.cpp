@@ -199,13 +199,14 @@ int Timer::create(Action cb, uint32_t period, uint32_t param, int count) {
         .count  = count,
         .period = period,
         .tick   = 0,
-        .active = 1,
+        .active = false,
     };
 
     InstanceList *handle = add_slice_instance(inst);
     if (handle == nullptr) {
         return -1;
     }
+    _cycle_count = count;
     _handle = handle;
     return 0;
 }
@@ -219,6 +220,7 @@ void Timer::start() {
 void Timer::restart() {
     if (_handle == nullptr) return;
     InstanceList *handle = (InstanceList *)_handle;
+    handle->content.count = _cycle_count;
     handle->content.tick = 0;
     handle->content.active = 1;
 }
@@ -247,6 +249,7 @@ void Timer::setPeriod(uint32_t period) {
 void Timer::setCycleCount(uint32_t count) {
     if (_handle == nullptr) return;
     InstanceList *handle = (InstanceList *)_handle;
+    _cycle_count = count;
     handle->content.count = count;
     handle->content.active = 1;
     handle->content.tick = 0;

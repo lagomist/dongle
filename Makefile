@@ -144,7 +144,7 @@ INC_FOLDERS += \
 	-Imain/comm/include \
 
 # Libraries common to all targets
-LIB_FILES += \
+LIB_FILES += -lc -lnosys -lm
 
 
 #######################################
@@ -215,9 +215,6 @@ CFLAGS += -fdiagnostics-color=always
 CXXFLAGS = $(CFLAGS) -std=c++17
 # Assembler flags common to all targets
 ASFLAGS = $(MCU) $(AS_DEFS) $(OPT)
-ASMFLAGS += -DAPP_TIMER_V2
-ASMFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
-ASMFLAGS += -DBOARD_PCA10056
 ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
 ASMFLAGS += -DFLOAT_ABI_HARD
 ASMFLAGS += -DNRF52840_XXAA
@@ -231,16 +228,13 @@ LDFLAGS = $(MCU) -L$(SDK_ROOT)/modules/nrfx/mdk -T$(LINKER_SCRIPT)
 LDFLAGS += -Wl,--gc-sections
 # use newlib in nano version
 LDFLAGS += --specs=nano.specs
-LDFLAGS += -lstdc++ -lgcc
+
+LIB_FILES += -lstdc++
 
 nrf52840: CFLAGS += -D__HEAP_SIZE=8192
 nrf52840: CFLAGS += -D__STACK_SIZE=8192
 nrf52840: ASMFLAGS += -D__HEAP_SIZE=8192
 nrf52840: ASMFLAGS += -D__STACK_SIZE=8192
-
-# Add standard libraries at the very end of the linker input, after all objects
-# that may need symbols provided by these libraries.
-LIB_FILES += -lc -lnosys -lm
 
 
 # default action: build all
@@ -279,7 +273,7 @@ $(BUILD_DIR)/%.o: %.S Makefile | $(BUILD_DIR)
 
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile
 	@echo "\033[32m[LD]  Linking: $(TARGET).elf\033[0m"
-	$(NO_ECHO)$(CC) $(OBJECTS) $(LDFLAGS) -o $@
+	$(NO_ECHO)$(CXX) $(OBJECTS) $(LDFLAGS) $(LIB_FILES) -o $@
 	@echo "\033[36m[SZ]  Size:\033[0m"
 	$(NO_ECHO)$(SZ) $@
 

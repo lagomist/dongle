@@ -5897,7 +5897,7 @@
 
 // <o> NRF_CLI_ARGC_MAX - Maximum number of parameters passed to the command handler. 
 #ifndef NRF_CLI_ARGC_MAX
-#define NRF_CLI_ARGC_MAX 12
+#define NRF_CLI_ARGC_MAX 8
 #endif
 
 // <q> NRF_CLI_BUILD_IN_CMDS_ENABLED  - CLI built-in commands.
@@ -5909,7 +5909,7 @@
 
 // <o> NRF_CLI_CMD_BUFF_SIZE - Maximum buffer size for a single command. 
 #ifndef NRF_CLI_CMD_BUFF_SIZE
-#define NRF_CLI_CMD_BUFF_SIZE 128
+#define NRF_CLI_CMD_BUFF_SIZE 1024
 #endif
 
 // <q> NRF_CLI_ECHO_STATUS  - CLI echo status. If set, echo is ON.
@@ -5930,12 +5930,12 @@
  
 
 #ifndef NRF_CLI_METAKEYS_ENABLED
-#define NRF_CLI_METAKEYS_ENABLED 0
+#define NRF_CLI_METAKEYS_ENABLED 1
 #endif
 
 // <o> NRF_CLI_PRINTF_BUFF_SIZE - Maximum print buffer size. 
 #ifndef NRF_CLI_PRINTF_BUFF_SIZE
-#define NRF_CLI_PRINTF_BUFF_SIZE 23
+#define NRF_CLI_PRINTF_BUFF_SIZE 512
 #endif
 
 // <e> NRF_CLI_HISTORY_ENABLED - Enable CLI history mode.
@@ -5966,14 +5966,14 @@
  
 
 #ifndef NRF_CLI_STATISTICS_ENABLED
-#define NRF_CLI_STATISTICS_ENABLED 1
+#define NRF_CLI_STATISTICS_ENABLED 0
 #endif
 
 // <q> NRF_CLI_LOG_BACKEND  - Enable logger backend interface.
  
 
 #ifndef NRF_CLI_LOG_BACKEND
-#define NRF_CLI_LOG_BACKEND 1
+#define NRF_CLI_LOG_BACKEND 0
 #endif
 
 // <q> NRF_CLI_USES_TASK_MANAGER_ENABLED  - Enable CLI to use task_manager
@@ -6038,7 +6038,7 @@
  
 
 #ifndef NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED
-#define NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED 1
+#define NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED 0
 #endif
 
 // <q> NRF_FPRINTF_DOUBLE_ENABLED  - Enable IEEE-754 double precision formatting.

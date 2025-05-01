@@ -285,14 +285,14 @@ int notif_enable() {
     return notif_config(_profile.characteristic.cccd_handle, true);
 }
 
-void scan_start(uint32_t timeout_ms) {
+void scan_start(uint16_t timeout_sec) {
     ble_gap_scan_params_t params = {
         .active        = 0x01,
         .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,
         .scan_phys     = BLE_GAP_PHY_1MBPS,
         .interval      = APP_BLE_SCAN_INTERVAL,
         .window        = APP_BLE_SCAN_WINDOW,
-        .timeout       = (uint16_t )(timeout_ms / 10),
+        .timeout       = (uint16_t )(timeout_sec * 100),
     };
     nrf_ble_scan_params_set(&_scan_inst, &params);
     nrf_ble_scan_start(&_scan_inst);
@@ -410,7 +410,7 @@ static void ble_scan_init(void) {
 	
     memset(&init_scan, 0, sizeof(init_scan));
     // 自动连接设置为false
-    init_scan.connect_if_match = true;
+    init_scan.connect_if_match = false;
     // 使用初始化结构体中的扫描参数配置扫描器，这里p_scan_param指向定义的扫描参数
     init_scan.p_scan_param     = &scan_param;
     // conn_cfg_tag设置为1
