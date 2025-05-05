@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include <string_view>
 
 
@@ -11,10 +11,20 @@ namespace BLE {
 namespace Client {
 
 enum EvtType : uint8_t {
+    IDLE,
     SCAN_TIMEOUT_EVT,           // 扫描超时
+    CONNECT_TIMEOUT_EVT,        // 连接超时
+    CONNECTED_EVT,              // 连接成功
     SERVICE_DISCOVER_EVT,       // 服务发现
     SEND_COMPLETE_EVT,          // 数据发送完成
     DISCONNECTED_EVT,           // 连接断开
+};
+
+struct AdvReport {
+    char name[32];
+    uint8_t addr[6];
+    int8_t tx_power;
+    int8_t rssi;
 };
 
 struct CharHandle {
@@ -24,7 +34,7 @@ struct CharHandle {
 };
 
 using EvtCallback = void (*)(EvtType evt, uint16_t handle);
-using ScanCallback = void (*)(const uint8_t *adv_data, uint8_t adv_len);
+using ScanCallback = void (*)(AdvReport report);
 using RecvCallback = void (*)(uint16_t handle, const uint8_t *data, uint16_t len);
 using DbDisCallback = void (*)(uint16_t srv_uuid, CharHandle char_uuid[], uint16_t count);
 
@@ -41,6 +51,8 @@ int register_conn_handle(uint16_t conn_handle);
 int notif_config(uint16_t cccd_handle, bool notification_enable);
 int notif_enable();
 void scan_start(uint16_t timeout_sec = 0);
+int connection(uint8_t addr[6], uint16_t timeout_sec);
+int disconnection();
 
 void register_evt_callback(EvtCallback cb);
 void register_scan_callback(ScanCallback cb);

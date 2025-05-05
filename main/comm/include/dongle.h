@@ -1,17 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace dongle {
 
-enum Status : uint8_t {
-	EMPTY,
-	SCAN_TIMEOUT,
-	CONNECTED,
-	DISCONNECTED
-};
-
 void ble_scan(uint16_t timeout);
+int ble_connect(std::string_view name, uint16_t timeout);
+int ble_disconnect();
 int init();
 
 }

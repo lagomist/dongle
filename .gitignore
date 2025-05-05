@@ -17,3 +17,7 @@ build/
 *.d
 *.map
 *.htm
+
+config.mk
+jlink_flash_softdevice.jlink
+jlink_flash.jlink

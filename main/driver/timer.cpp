@@ -16,7 +16,7 @@ namespace AppTimer {
 
 struct SliceInstance {
     Action action;
-    uint32_t param;
+    void *param;
     int count;
     uint32_t period;
     volatile uint32_t tick;
@@ -103,11 +103,11 @@ void sliceProcess(void) {
 }
 
 
-Task::Task(Action task, uint32_t period, uint32_t param, int count) {
+Task::Task(Action task, uint32_t period, void *param, int count) {
 	create(task, period, param, count);
 }
 
-int Task::create(Action task, uint32_t period, uint32_t param, int count) {
+int Task::create(Action task, uint32_t period, void *param, int count) {
     SliceInstance inst = {
         .action = task,
         .param  = param,
@@ -162,7 +162,7 @@ void Task::setPeriod(uint32_t period) {
     handle->content.tick = period;
 }
 
-void Task::setParam(uint32_t param) {
+void Task::setParam(void *param) {
     if (_handle == nullptr) return;
     InstanceList *handle = (InstanceList *)_handle;
     handle->content.param = param;
@@ -188,11 +188,11 @@ uint32_t Task::getRemainingTime() {
 
 
 
-Timer::Timer(Action cb, uint32_t period, uint32_t param, int count) {
+Timer::Timer(Action cb, uint32_t period, void *param, int count) {
     create(cb, period, param, count);
 }
 
-int Timer::create(Action cb, uint32_t period, uint32_t param, int count) {
+int Timer::create(Action cb, uint32_t period, void *param, int count) {
     SliceInstance inst = {
         .action = cb,
         .param  = param,

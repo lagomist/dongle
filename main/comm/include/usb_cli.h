@@ -6,8 +6,8 @@
 
 namespace usb_cli {
 
-int write(const char data[], size_t length);
 int write(std::string_view str);
+int write(const char *p_fmt, ...);
 
 void enable();
 int init(); 

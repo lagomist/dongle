@@ -1,12 +1,10 @@
-PROJECT_NAME     := Template
-TARGET          := nrf52840
-BUILD_DIR 		 := build
+PROJECT_NAME    := Template
+TARGET       	:= nrf52840
+BUILD_DIR 		:= build
 
 SDK_ROOT := components/nRF5_SDK
 SDK_CONFIG_FILE := main/config/sdk_config.h
 CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
-GCC_PATH := /home/lagomist/Workspace/toolchain/arm-none-eabi/bin
-
 LINKER_SCRIPT  := partitions.ld
 
 VERBOSE ?= 0
@@ -15,6 +13,9 @@ ifeq ($(VERBOSE),1)
 else
   NO_ECHO := @
 endif
+
+# Makefile
+-include config.mk
 
 # Source files common to all targets
 ASMM_SOURCES = $(SDK_ROOT)/modules/nrfx/mdk/gcc_startup_nrf52840.S
@@ -303,7 +304,11 @@ help:
 	@echo		sdk_config - starting external tool for editing sdk_config.h
 	@echo		flash      - flashing binary
 
+ifdef JLINK_PATH
+JLINK = $(JLINK_PATH)/JLinkExe
+else
 JLINK = JLinkExe
+endif
 JLINK_DEVICE = NRF52840_XXAA
 JLINK_IF = SWD
 JLINK_SPEED = 4000

@@ -76,10 +76,21 @@ int write(const char data[], size_t length) {
 }
 
 int write(std::string_view str) {
-	return write(str.data(), str.size());
+	nrf_cli_fprintf(&_usb_cdc_cli, NRF_CLI_INFO, str.data());
+	return 0;
 }
 
-static void process(uint32_t arg) {
+int write(const char *p_fmt, ...) {
+	va_list args;
+    va_start(args, p_fmt);
+
+	nrf_fprintf_fmt(_usb_cdc_cli.p_fprintf_ctx, p_fmt, &args);
+    
+    va_end(args);
+    return 0;
+}
+
+static void process(void *arg) {
 	nrf_cli_process(&_usb_cdc_cli);
 }
 
@@ -107,7 +118,7 @@ int init(void) {
 	ret = nrf_cli_init(&_usb_cdc_cli, NULL, true, false, NRF_LOG_SEVERITY_NONE);
     APP_ERROR_CHECK(ret);
 
-	_task_handle.create(process, 0);
+	_task_handle.create(process, Wrapper::AppTimer::CALL_IMMEDIATE);
 	_task_handle.suspend();
 	
 	NRF_LOG_INFO("init success.");

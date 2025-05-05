@@ -18,7 +18,7 @@ static bool _add = true;
 
 
 /* system running status display */
-void sys_state_task(uint32_t param) {
+void sys_state_task(void *arg) {
 	if (_led_duty >= 1.0f ) {
 		_add = false;
 	}
