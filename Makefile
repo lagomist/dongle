@@ -211,17 +211,16 @@ CFLAGS += -fno-builtin -fshort-enums
 CFLAGS += -Wno-error=array-bounds
 CFLAGS += -Wunused-function
 CFLAGS += -fdiagnostics-color=always
+CFLAGS += -MMD -MP
 
 # C++ flags common to all targets
 CXXFLAGS = $(CFLAGS) -std=c++17
 # Assembler flags common to all targets
-ASFLAGS = $(MCU) $(AS_DEFS) $(OPT)
-ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
+ASMFLAGS = $(MCU) $(AS_DEFS) $(OPT)
 ASMFLAGS += -DFLOAT_ABI_HARD
-ASMFLAGS += -DNRF52840_XXAA
-ASMFLAGS += -DNRF_SD_BLE_API_VERSION=7
-ASMFLAGS += -DS140
-ASMFLAGS += -DSOFTDEVICE_PRESENT
+ASMFLAGS += -D__HEAP_SIZE=8192
+ASMFLAGS += -D__STACK_SIZE=8192
+ASMFLAGS += -MMD -MP
 
 # Linker flags
 LDFLAGS = $(MCU) -L$(SDK_ROOT)/modules/nrfx/mdk -T$(LINKER_SCRIPT)
@@ -232,10 +231,6 @@ LDFLAGS += --specs=nano.specs
 
 LIB_FILES += -lstdc++
 
-nrf52840: CFLAGS += -D__HEAP_SIZE=8192
-nrf52840: CFLAGS += -D__STACK_SIZE=8192
-nrf52840: ASMFLAGS += -D__HEAP_SIZE=8192
-nrf52840: ASMFLAGS += -D__STACK_SIZE=8192
 
 
 # default action: build all
@@ -257,6 +252,10 @@ vpath %.s $(sort $(dir $(ASM_SOURCES)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASMM_SOURCES:.S=.o)))
 vpath %.S $(sort $(dir $(ASMM_SOURCES)))
 
+# depend file list
+DEPS = $(OBJECTS:.o=.d)
+-include $(DEPS)
+
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
 	@echo "\033[32m[CC]  Compiling: $< -> $@\033[0m"
 	$(NO_ECHO)$(CC) -c $(CFLAGS) $< -o $@
@@ -267,10 +266,10 @@ $(BUILD_DIR)/%.o: %.cpp Makefile | $(BUILD_DIR)
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
 	@echo "\033[32m[AS]  Compiling: $< -> $@\033[0m"
-	$(NO_ECHO)$(AS) -c $(ASFLAGS) $< -o $@
+	$(NO_ECHO)$(AS) -c $(ASMFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.S Makefile | $(BUILD_DIR)
 	@echo "\033[32m[AS]  Compiling: $< -> $@\033[0m"
-	$(NO_ECHO)$(AS) -c $(ASFLAGS) $< -o $@
+	$(NO_ECHO)$(AS) -c $(ASMFLAGS) $< -o $@
 
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile
 	@echo "\033[32m[LD]  Linking: $(TARGET).elf\033[0m"
@@ -289,11 +288,9 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 $(BUILD_DIR):
 	mkdir -p $@
 
-.PHONY: clean flash flash_softdevice sdk_config help
+.PHONY: all clean flash flash_softdevice sdk_config help
 
-#######################################
 # clean up
-#######################################
 clean:
 	-rm -r $(BUILD_DIR)
 # Print all targets that can be built

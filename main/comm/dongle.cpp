@@ -46,9 +46,10 @@ static void db_callback(uint16_t srv_uuid, Wrapper::BLE::Client::CharHandle char
 }
 
 static void dongle_task(void *arg) {
+	usb_cli::write("\nBLE %s\n", Wrapper::BLE::Client::evt_to_str(_status).data());
 	switch (_status) {
 	case Wrapper::BLE::Client::EvtType::SCAN_TIMEOUT_EVT:
-		usb_cli::write("\nScan found device:\n");
+		usb_cli::write("found device:\n");
 		for (int i = 0; (i < SCAN_MAX_BUF_NUM) && (_scan_dev_list[i].addr[0] != 0); i++) {
 			usb_cli::write("%-24s\t%02X:%02X:%02X:%02X:%02X:%02X\t%d\n",
 							_scan_dev_list[i].name,
@@ -58,13 +59,13 @@ static void dongle_task(void *arg) {
 		}
 		break;
 	case Wrapper::BLE::Client::EvtType::CONNECT_TIMEOUT_EVT:
-		usb_cli::write("\n%s connect timeout.\n", _target_device.name);
+		usb_cli::write("%s connect failed.\n", _target_device.name);
 		break;
 	case Wrapper::BLE::Client::EvtType::CONNECTED_EVT:
-		usb_cli::write("\n%s connected\n", _target_device.name);
+		usb_cli::write("%s connected.\n", _target_device.name);
 		break;
 	case Wrapper::BLE::Client::EvtType::SERVICE_DISCOVER_EVT:
-		usb_cli::write("\n%s discovered service UUID: %04X\n", _target_device.name, _srv_uuid);
+		usb_cli::write("%s discovered service UUID: %04X\n", _target_device.name, _srv_uuid);
 		for (int i = 0; (i < CHAR_MAX_BUF_NUM) && (_char_handle[i].uuid != 0); i++) {
 			usb_cli::write("Characteristic UUID: %04X\n", _char_handle[i].uuid);
 		}
@@ -86,8 +87,7 @@ int ble_connect(std::string_view name, uint16_t timeout) {
 	for (int i = 0; (i < SCAN_MAX_BUF_NUM) && (_scan_dev_list[i].addr[0] != 0); i++) {
 		if (strcmp(_scan_dev_list[i].name, name.data()) == 0) {
 			_target_device = _scan_dev_list[i];
-			Wrapper::BLE::Client::connection(_scan_dev_list[i].addr, timeout);
-			return 0;
+			return Wrapper::BLE::Client::connection(_scan_dev_list[i].addr, timeout);
 		}
 	}
 	return -1;

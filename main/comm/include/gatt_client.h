@@ -10,15 +10,34 @@ namespace BLE {
 
 namespace Client {
 
-enum EvtType : uint8_t {
+enum class EvtType : uint8_t {
     IDLE,
+    SCANTING_EVT,
     SCAN_TIMEOUT_EVT,           // 扫描超时
+    CONNECTING_EVT,
     CONNECT_TIMEOUT_EVT,        // 连接超时
     CONNECTED_EVT,              // 连接成功
     SERVICE_DISCOVER_EVT,       // 服务发现
     SEND_COMPLETE_EVT,          // 数据发送完成
     DISCONNECTED_EVT,           // 连接断开
 };
+
+constexpr std::string_view evt_to_str(EvtType evt) {
+    switch (evt) {
+    case EvtType::IDLE:                 return "idle";
+    case EvtType::SCANTING_EVT:         return "scaning";
+    case EvtType::SCAN_TIMEOUT_EVT:     return "scan timeout";
+    case EvtType::CONNECTING_EVT:       return "connecting";
+    case EvtType::CONNECT_TIMEOUT_EVT:  return "timeout";
+    case EvtType::CONNECTED_EVT:        return "connected";
+    case EvtType::SERVICE_DISCOVER_EVT: return "service discoverd";
+    case EvtType::SEND_COMPLETE_EVT:    return "sended";
+    case EvtType::DISCONNECTED_EVT:     return "disconnected";
+    default:
+        break;
+    }
+    return "unknown";
+}
 
 struct AdvReport {
     char name[32];

@@ -56,6 +56,7 @@ struct gattc_profile {
     DbDisCallback   db_handler;
 };
 static gattc_profile _profile;
+static EvtType _current_evt;
 NRF_BLE_GATT_DEF(_gatt_inst);
 NRF_BLE_GQ_DEF(_ble_gatt_queue, NRF_SDH_BLE_CENTRAL_LINK_COUNT, NRF_BLE_GQ_QUEUE_SIZE);
 NRF_BLE_SCAN_DEF(_scan_inst);
@@ -70,6 +71,13 @@ static ble_gap_scan_params_t _scan_param = {
     .interval      = APP_BLE_SCAN_INTERVAL,
     .window        = APP_BLE_SCAN_WINDOW,
     .timeout       = 0,
+};
+
+ble_gap_conn_params_t _conn_param = {
+    .min_conn_interval = APP_MIN_CONNECTION_INTERVAL,
+    .max_conn_interval = APP_MAX_CONNECTION_INTERVAL,
+    .slave_latency     = 0,
+    .conn_sup_timeout  = 500,
 };
 
 static void gatt_error_handler(uint32_t nrf_error, void * p_ctx, uint16_t conn_handle) {
@@ -105,8 +113,9 @@ static void db_disc_handler(ble_db_discovery_evt_t * p_evt) {
                 _profile.characteristic.cccd_handle = p_chars[i].cccd_handle;
             }
         }
+        _current_evt = EvtType::SERVICE_DISCOVER_EVT;
         if (_profile.evt_handler != nullptr) {
-            _profile.evt_handler(SERVICE_DISCOVER_EVT, p_evt->conn_handle);
+            _profile.evt_handler(EvtType::SERVICE_DISCOVER_EVT, p_evt->conn_handle);
         }
         register_conn_handle(p_evt->conn_handle);
     }
@@ -118,7 +127,6 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
 
     switch (p_ble_evt->header.evt_id) {
         case BLE_GAP_EVT_CONNECTED:
-            NRF_LOG_INFO("Ble connected");
             _profile.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             register_conn_handle(p_ble_evt->evt.gap_evt.conn_handle);
 
@@ -126,22 +134,26 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
             err_code = ble_db_discovery_start(&_db_disc, p_ble_evt->evt.gap_evt.conn_handle);
             APP_ERROR_CHECK(err_code);
 
+            _current_evt = EvtType::CONNECTED_EVT;
             if (_profile.evt_handler != nullptr)
-                _profile.evt_handler(CONNECTED_EVT, p_ble_evt->evt.gap_evt.conn_handle);
+                _profile.evt_handler(EvtType::CONNECTED_EVT, p_ble_evt->evt.gap_evt.conn_handle);
 
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            NRF_LOG_INFO("Ble disconnected. reason: 0x%x", p_gap_evt->params.disconnected.reason);
+            NRF_LOG_DEBUG("Ble disconnected. reason: 0x%x", p_gap_evt->params.disconnected.reason);
             _profile.conn_handle = BLE_CONN_HANDLE_INVALID;
+            _current_evt = EvtType::DISCONNECTED_EVT;
             if (_profile.evt_handler != nullptr)
-                _profile.evt_handler(DISCONNECTED_EVT, BLE_CONN_HANDLE_INVALID);
+                _profile.evt_handler(EvtType::DISCONNECTED_EVT, BLE_CONN_HANDLE_INVALID);
             break;
 
         case BLE_GAP_EVT_TIMEOUT:
-            NRF_LOG_WARNING("Connection Request timed out.");
+            NRF_LOG_DEBUG("Request timed out.");
+            if (_current_evt == EvtType::SCAN_TIMEOUT_EVT || _current_evt == EvtType::SCANTING_EVT) break;
+            _current_evt = EvtType::CONNECT_TIMEOUT_EVT;
             if (_profile.evt_handler != nullptr)
-                _profile.evt_handler(CONNECT_TIMEOUT_EVT, p_ble_evt->evt.gap_evt.conn_handle);
+                _profile.evt_handler(EvtType::CONNECT_TIMEOUT_EVT, p_ble_evt->evt.gap_evt.conn_handle);
             break;
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
@@ -198,13 +210,14 @@ static void ble_observer_evt_handler(ble_evt_t const * p_ble_evt, void * p_conte
         case BLE_GATTC_EVT_WRITE_CMD_TX_COMPLETE: {
             // Write without Response transmission complete.
             NRF_LOG_DEBUG("BLE_GATTC_EVT_WRITE_CMD_TX_COMPLETE");
+            _current_evt = EvtType::SEND_COMPLETE_EVT;
             if (_profile.evt_handler != nullptr)
-                _profile.evt_handler(SEND_COMPLETE_EVT, p_ble_evt->evt.gap_evt.conn_handle);
+                _profile.evt_handler(EvtType::SEND_COMPLETE_EVT, p_ble_evt->evt.gap_evt.conn_handle);
             break;
         }
         case BLE_GATTC_EVT_TIMEOUT:
             // Disconnect on GATT Client timeout event.
-            NRF_LOG_DEBUG("GATT Client Timeout.\n");
+            NRF_LOG_INFO("GATT Client Timeout.\n");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -262,9 +275,10 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
         }
 
         case NRF_BLE_SCAN_EVT_SCAN_TIMEOUT: {
-            NRF_LOG_WARNING("Scan timed out.");
+            NRF_LOG_INFO("Scan timed out.");
+            _current_evt = EvtType::SCAN_TIMEOUT_EVT;
             if (_profile.evt_handler) {
-                _profile.evt_handler(SCAN_TIMEOUT_EVT, 0);
+                _profile.evt_handler(EvtType::SCAN_TIMEOUT_EVT, 0);
             }
             break;
         }
@@ -277,7 +291,7 @@ static void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const *
     if (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED) {
         // 设置GATT通信服务的有效数据长度（MTU-opcode-handle=MTU大小-1-2）
         _gattc_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
-        NRF_LOG_INFO("Ble transmit max data length set to %d byte", _gattc_max_data_len);
+        NRF_LOG_DEBUG("Ble transmit max data length set to %d byte", _gattc_max_data_len);
     }
 }
 
@@ -313,18 +327,14 @@ int notif_enable() {
 }
 
 int connection(uint8_t addr[6], uint16_t timeout_sec) {
+    _current_evt = EvtType::CONNECTING_EVT;
     ble_gap_addr_t peer_addr = {
         .addr_id_peer = 0,
         .addr_type = BLE_GAP_ADDR_TYPE_PUBLIC,
     };
     memcpy(peer_addr.addr, addr, sizeof(peer_addr.addr));
-    ble_gap_conn_params_t conn_param = {
-        .min_conn_interval = APP_MIN_CONNECTION_INTERVAL,
-        .max_conn_interval = APP_MAX_CONNECTION_INTERVAL,
-        .slave_latency     = 0,
-        .conn_sup_timeout  = (uint16_t )(timeout_sec * 100),
-    };
-    return sd_ble_gap_connect(&peer_addr, &_scan_param, &conn_param, BLE_CONN_CFG_TAG_DEFAULT);
+    _conn_param.conn_sup_timeout = (uint16_t )(timeout_sec * 100);
+    return sd_ble_gap_connect(&peer_addr, &_scan_param, &_conn_param, APP_BLE_CONN_CFG_TAG);
 }
 
 int disconnection() {
@@ -332,6 +342,7 @@ int disconnection() {
 }
 
 void scan_start(uint16_t timeout_sec) {
+    _current_evt = EvtType::SCANTING_EVT;
     _scan_param.timeout = (uint16_t )(timeout_sec * 100);
     nrf_ble_scan_params_set(&_scan_inst, &_scan_param);
     nrf_ble_scan_start(&_scan_inst);
@@ -444,6 +455,7 @@ static void ble_scan_init(void) {
     init_scan.connect_if_match = false;
     // 使用初始化结构体中的扫描参数配置扫描器，这里p_scan_param指向定义的扫描参数
     init_scan.p_scan_param     = &_scan_param;
+    init_scan.p_conn_param     = &_conn_param;
     // conn_cfg_tag设置为1
     init_scan.conn_cfg_tag     = APP_BLE_CONN_CFG_TAG;
     // 初始化扫描器

@@ -62,10 +62,11 @@ static void cmd_ble_connect(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     CMD_ASSERT(argc >= 2);
     std::string_view name({argv[1], strlen(argv[1])});
     uint16_t timeout = (argc == 3) ? atoi(argv[2]) : 5;
-    if (dongle::ble_connect(name, timeout) == 0) {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Connecting %s...\n", argv[1]);
+    int res = dongle::ble_connect(name, timeout);
+    if (res == 0) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s connecting ...\n", argv[1]);
     } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "%s not found\n", argv[1]);
+        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "[%d] %s connection failed.\n", res, argv[1]);
     }
 }
 
