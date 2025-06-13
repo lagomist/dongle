@@ -53,7 +53,7 @@ static void cmd_ble(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_ble_scan(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    uint16_t timeout = (argc == 2) ? atoi(argv[1]) : 10;
+    uint16_t timeout = (argc == 2) ? atoi(argv[1]) : 5;
     dongle::ble_scan(timeout);
     nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "start scan %d sec\n", timeout);
 }
@@ -66,7 +66,24 @@ static void cmd_ble_connect(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     if (res == 0) {
         nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s connecting ...\n", argv[1]);
     } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "[%d] %s connection failed.\n", res, argv[1]);
+        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "[%s] %s connection failed.\n", NRF_LOG_ERROR_STRING_GET(res), argv[1]);
+    }
+}
+
+static void cmd_ble_select(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    CMD_ASSERT(argc == 2);
+    uint16_t char_uuid = strtoul(argv[1], nullptr, 16);
+    if (dongle::ble_select(char_uuid) < 0) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "UUID not found.\n");
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Enable notify.\n");
+    }
+}
+
+static void cmd_ble_send(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    CMD_ASSERT(argc == 2);
+    if (dongle::ble_send(argv[1]) < 0) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "Send failed.\n");
     }
 }
 
@@ -79,6 +96,8 @@ NRF_CLI_CMD_REGISTER(nordic, nullptr, "Print Nordic Semiconductor logo.", cmd_no
 NRF_CLI_CPP_CREATE_STATIC_SUBCMD_SET(m_sub_ble,
     NRF_CLI_CMD(scan,   nullptr, "Scan ble device.", cmd_ble_scan),
     NRF_CLI_CMD(connect,   nullptr, "Connect ble device.", cmd_ble_connect),
+    NRF_CLI_CMD(select,   nullptr, "Select ble a service.", cmd_ble_select),
+    NRF_CLI_CMD(send,   nullptr, "Send a string data.", cmd_ble_send),
     NRF_CLI_CMD(disconnect,   nullptr, "Disconnect ble device.", cmd_ble_disconnect),
     NRF_CLI_SUBCMD_SET_END
 );

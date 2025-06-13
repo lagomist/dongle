@@ -1,4 +1,5 @@
 #include "gatt_client.h"
+#include "timer.h"
 #include "sdk_config.h"
 #include "sdk_common.h"
 #include "ble.h"
@@ -10,6 +11,7 @@
 #include "ble_srv_common.h"
 #include "nrf_ble_scan.h"
 #include "nrf_ble_gatt.h"
+#include "app_scheduler.h"
 #include "app_error.h"
 #include <vector>
 #include <cstdint>
@@ -55,8 +57,19 @@ struct gattc_profile {
     RecvCallback    recv_handler;
     DbDisCallback   db_handler;
 };
+
+enum DBEvent : uint8_t {
+    PRIMARY_SRV_RSP,
+    CHAR_DISC_RSP,
+    DESC_DISC_RSP
+};
+
 static gattc_profile _profile;
+static GattDatabase _database;
 static EvtType _current_evt;
+static Wrapper::AppTimer::Timer _timer_handle;
+static Wrapper::AppTimer::Task _task_handle;
+static DBEvent _db_event;
 NRF_BLE_GATT_DEF(_gatt_inst);
 NRF_BLE_GQ_DEF(_ble_gatt_queue, NRF_SDH_BLE_CENTRAL_LINK_COUNT, NRF_BLE_GQ_QUEUE_SIZE);
 NRF_BLE_SCAN_DEF(_scan_inst);
@@ -70,13 +83,13 @@ static ble_gap_scan_params_t _scan_param = {
     .scan_phys     = BLE_GAP_PHY_1MBPS,
     .interval      = APP_BLE_SCAN_INTERVAL,
     .window        = APP_BLE_SCAN_WINDOW,
-    .timeout       = 0,
+    .timeout       = 1000,
 };
 
 ble_gap_conn_params_t _conn_param = {
     .min_conn_interval = APP_MIN_CONNECTION_INTERVAL,
     .max_conn_interval = APP_MAX_CONNECTION_INTERVAL,
-    .slave_latency     = 0,
+    .slave_latency     = NRF_BLE_SCAN_SLAVE_LATENCY,
     .conn_sup_timeout  = 500,
 };
 
@@ -85,40 +98,139 @@ static void gatt_error_handler(uint32_t nrf_error, void * p_ctx, uint16_t conn_h
     APP_ERROR_HANDLER(nrf_error);
 }
 
-// DB发现事件处理函数
-static void db_disc_handler(ble_db_discovery_evt_t * p_evt) {
-    if (p_evt->evt_type != BLE_DB_DISCOVERY_COMPLETE) return;
+static void app_scheduler_process(void *arg) {
+    app_sched_execute();
+}
 
-    ble_gatt_db_char_t * p_chars = p_evt->params.discovered_db.charateristics;
-    if (_profile.srv_uuid == BLE_UUID_UNKNOWN) {
-        // 未设置服务UUID，回调处理
-        if (_profile.db_handler != nullptr) {
-            uint16_t service_uuid = p_evt->params.discovered_db.srv_uuid.uuid;
-            uint16_t char_count = p_evt->params.discovered_db.char_count;
-            CharHandle char_array[12];
-            for (int i = 0; i < char_count; i++) {
-                char_array[i].uuid = p_chars[i].characteristic.uuid.uuid;
-                char_array[i].char_handle = p_chars[i].characteristic.handle_value;
-                char_array[i].cccd_handle = p_chars[i].cccd_handle;
-            }
-            _profile.db_handler(service_uuid, char_array, char_count);
-        }
-        return;
-    }
-    // found service uuid and characteristic uuid
-    if (_profile.srv_uuid == p_evt->params.discovered_db.srv_uuid.uuid) {
-        for (int i = 0; i < p_evt->params.discovered_db.char_count; i++) {
-            if (_profile.characteristic.uuid == p_chars[i].characteristic.uuid.uuid) {
-                _profile.characteristic.char_handle = p_chars[i].characteristic.handle_value;
-                _profile.characteristic.cccd_handle = p_chars[i].cccd_handle;
+static void database_task(void *arg) {
+    // DBEvent event = *(DBEvent *)arg;
+    switch (_db_event) {
+    case DBEvent::PRIMARY_SRV_RSP: {
+        NRF_LOG_INFO("PRIMARY_SRV_RSP");
+        for (uint16_t i = 0; i < _database.service_count; i++) {
+            if (_database.services[i].char_count == 0) {
+                // 启动特征发现
+                ble_gattc_handle_range_t char_range = {
+                    .start_handle = _database.services[i].start_handle,
+                    .end_handle = _database.services[i].end_handle
+                };
+                ret_code_t err_code = sd_ble_gattc_characteristics_discover(_profile.conn_handle, &char_range);
+                APP_ERROR_CHECK(err_code);
+                break;
             }
         }
-        _current_evt = EvtType::SERVICE_DISCOVER_EVT;
-        if (_profile.evt_handler != nullptr) {
-            _profile.evt_handler(EvtType::SERVICE_DISCOVER_EVT, p_evt->conn_handle);
-        }
-        register_conn_handle(p_evt->conn_handle);
+        break;
     }
+    case DBEvent::CHAR_DISC_RSP: {
+        NRF_LOG_INFO("CHAR_DISC_RSP");
+        for (uint16_t i = 0; i < _database.service_count; i++) {
+            CharacteristicProperty * char_property = _database.services[i].characteristics;
+            for (uint16_t j = 0; j < _database.services[i].char_count; j++) {
+                if (char_property[j].cccd_handle == BLE_GATT_HANDLE_INVALID) {
+                    // 启动特征描述发现
+                    ble_gattc_handle_range_t char_range = {
+                        .start_handle = _database.services[i].start_handle,
+                        .end_handle = _database.services[i].end_handle
+                    };
+                    ret_code_t err_code = sd_ble_gattc_descriptors_discover(_profile.conn_handle, &char_range);
+                    APP_ERROR_CHECK(err_code);
+                    break;
+                }
+            }
+        }
+        break;
+    }
+    case DBEvent::DESC_DISC_RSP: {
+        uint16_t index = 0;
+        NRF_LOG_INFO("DESC_DISC_RSP");
+        for (index = 0; index < _database.service_count; index++) {
+            if (_database.services[index].char_count == 0) {
+                // 启动特征发现
+                ble_gattc_handle_range_t char_range = {
+                    .start_handle = _database.services[index].start_handle,
+                    .end_handle = _database.services[index].end_handle
+                };
+                ret_code_t err_code = sd_ble_gattc_characteristics_discover(_profile.conn_handle, &char_range);
+                APP_ERROR_CHECK(err_code);
+                break;
+            }
+        }
+        if (index >= _database.service_count) {
+            // 服务特征发现完成
+            _current_evt = EvtType::SERVICE_DISCOVER_EVT;
+            if (_profile.db_handler != nullptr) {
+                _profile.db_handler(&_database);
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+static void on_primary_srv_discovery_rsp(ble_gattc_evt_prim_srvc_disc_rsp_t const * p_services) {
+    memset(&_database, 0, sizeof(_database));
+
+    for (uint16_t i = 0; i < p_services->count; i++) {
+        const ble_gattc_service_t *p_service = &p_services->services[i];
+        if (p_service->uuid.type == BLE_UUID_TYPE_BLE) {
+            if (p_service->uuid.uuid != 0x1800 && p_service->uuid.uuid != 0x1801) {
+                _database.services[_database.service_count].uuid = p_service->uuid.uuid;
+                _database.services[_database.service_count].start_handle = p_service->handle_range.start_handle;
+                _database.services[_database.service_count].end_handle = p_service->handle_range.end_handle;
+                _database.services[_database.service_count].char_count = 0;
+                _database.service_count++;
+                
+            }
+            
+            NRF_LOG_DEBUG("find service UUID: 0x%04X", p_service->uuid.uuid);
+            if (_database.service_count > 5) {
+                break;
+            }
+        }
+    }
+    _db_event = DBEvent::PRIMARY_SRV_RSP;
+    _timer_handle.restart();
+}
+
+static void on_characteristic_discovery_rsp(ble_gattc_evt_char_disc_rsp_t const * p_chars) {
+    for (uint16_t i = 0; i < _database.service_count; i++) {
+        if (_database.services[i].char_count == 0) {
+            uint16_t chars_count = std::min(p_chars->count, (uint16_t )5);
+            CharacteristicProperty * char_property = _database.services[i].characteristics;
+            for (uint16_t j = 0; j < chars_count; j++) {
+                const ble_gattc_char_t *p_char = &p_chars->chars[j];
+                char_property[j].uuid = p_char->uuid.uuid;
+                char_property[j].handle = p_char->handle_decl;
+                char_property[j].value_handle = p_char->handle_value;
+                char_property[j].properties = *(uint8_t *)&p_char->char_props;
+                char_property[j].cccd_handle = BLE_GATT_HANDLE_INVALID;
+                NRF_LOG_DEBUG("find characteristics UUID: 0x%04X", p_char->uuid.uuid);
+            }
+            _database.services[i].char_count = chars_count;
+            break;
+        }
+    }
+    
+    _db_event = DBEvent::CHAR_DISC_RSP;
+    _timer_handle.restart();
+}
+
+static void on_descriptor_discovery_rsp(ble_gattc_evt_desc_disc_rsp_t const *p_descs) {
+    for (uint16_t i = 0; i < _database.service_count; i++) {
+        CharacteristicProperty * chars = _database.services[i].characteristics;
+        if (chars[0].cccd_handle == BLE_GATT_HANDLE_INVALID) {
+            uint16_t descs_count = std::min(p_descs->count, _database.services[i].char_count);
+            for (int j = 0; j < descs_count; j++) {
+                chars[j].cccd_handle = p_descs->descs[j].handle;
+            }
+            break;
+        }
+    }
+    
+    _db_event = DBEvent::DESC_DISC_RSP;
+    _timer_handle.restart();
 }
 
 static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
@@ -126,18 +238,21 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
     ble_gap_evt_t const * p_gap_evt = &p_ble_evt->evt.gap_evt;
 
     switch (p_ble_evt->header.evt_id) {
+        case BLE_GAP_EVT_ADV_REPORT:
+            break;
         case BLE_GAP_EVT_CONNECTED:
+            NRF_LOG_DEBUG("BLE_GAP_EVT_CONNECTED.");
             _profile.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            register_conn_handle(p_ble_evt->evt.gap_evt.conn_handle);
-
-            // 启动服务发现，GATT客户端会等待发现完成事件
-            err_code = ble_db_discovery_start(&_db_disc, p_ble_evt->evt.gap_evt.conn_handle);
+            
+            err_code = register_conn_handle(p_ble_evt->evt.gap_evt.conn_handle);
+            APP_ERROR_CHECK(err_code);
+            // 启动所有服务发现
+            err_code = primay_serivce_discover();
             APP_ERROR_CHECK(err_code);
 
             _current_evt = EvtType::CONNECTED_EVT;
             if (_profile.evt_handler != nullptr)
                 _profile.evt_handler(EvtType::CONNECTED_EVT, p_ble_evt->evt.gap_evt.conn_handle);
-
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
@@ -151,6 +266,7 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
         case BLE_GAP_EVT_TIMEOUT:
             NRF_LOG_DEBUG("Request timed out.");
             if (_current_evt == EvtType::SCAN_TIMEOUT_EVT || _current_evt == EvtType::SCANTING_EVT) break;
+            sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             _current_evt = EvtType::CONNECT_TIMEOUT_EVT;
             if (_profile.evt_handler != nullptr)
                 _profile.evt_handler(EvtType::CONNECT_TIMEOUT_EVT, p_ble_evt->evt.gap_evt.conn_handle);
@@ -190,12 +306,24 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
 
 static void ble_observer_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
     ret_code_t            err_code;
+    VERIFY_PARAM_NOT_NULL_VOID(p_ble_evt);
     // 检查连接句柄是否有效
-    if ( p_ble_evt == nullptr && (_profile.conn_handle == BLE_CONN_HANDLE_INVALID)) {
+    if ( _profile.conn_handle == BLE_CONN_HANDLE_INVALID) {
         return;
     }
     // 判断事件类型
     switch (p_ble_evt->header.evt_id) {
+        case BLE_GATTC_EVT_PRIM_SRVC_DISC_RSP:
+            on_primary_srv_discovery_rsp(&p_ble_evt->evt.gattc_evt.params.prim_srvc_disc_rsp);
+            break;
+
+        case BLE_GATTC_EVT_CHAR_DISC_RSP:
+            on_characteristic_discovery_rsp(&p_ble_evt->evt.gattc_evt.params.char_disc_rsp);
+            break;
+
+        case BLE_GATTC_EVT_DESC_DISC_RSP:
+            on_descriptor_discovery_rsp(&p_ble_evt->evt.gattc_evt.params.desc_disc_rsp);
+            break;
         case BLE_GATTC_EVT_HVX: {
             // 通知或指示事件
             NRF_LOG_DEBUG("BLE_GATTC_EVT_HVX");
@@ -217,7 +345,7 @@ static void ble_observer_evt_handler(ble_evt_t const * p_ble_evt, void * p_conte
         }
         case BLE_GATTC_EVT_TIMEOUT:
             // Disconnect on GATT Client timeout event.
-            NRF_LOG_INFO("GATT Client Timeout.\n");
+            NRF_LOG_DEBUG("GATT Client Timeout.\n");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -261,6 +389,9 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
         }
 
         case NRF_BLE_SCAN_EVT_NOT_FOUND: {
+            if (p_scan_evt->params.p_not_found->type.scan_response) {
+                break;
+            }
             ble_gap_evt_adv_report_t const * p_adv = p_scan_evt->params.p_not_found;
             AdvReport report = {};
             std::string_view adv_name = get_scan_adv_name(p_adv->data.p_data, p_adv->data.len);
@@ -275,7 +406,7 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
         }
 
         case NRF_BLE_SCAN_EVT_SCAN_TIMEOUT: {
-            NRF_LOG_INFO("Scan timed out.");
+            NRF_LOG_DEBUG("Scan timed out.");
             _current_evt = EvtType::SCAN_TIMEOUT_EVT;
             if (_profile.evt_handler) {
                 _profile.evt_handler(EvtType::SCAN_TIMEOUT_EVT, 0);
@@ -293,6 +424,13 @@ static void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const *
         _gattc_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
         NRF_LOG_DEBUG("Ble transmit max data length set to %d byte", _gattc_max_data_len);
     }
+}
+
+int primay_serivce_discover() {
+    if (_profile.conn_handle == BLE_CONN_HANDLE_INVALID) {
+        return -1;
+    }
+    return sd_ble_gattc_primary_services_discover(_profile.conn_handle, 0x0001, nullptr);
 }
 
 int notif_config(uint16_t cccd_handle, bool notification_enable) {
@@ -332,8 +470,9 @@ int connection(uint8_t addr[6], uint16_t timeout_sec) {
         .addr_id_peer = 0,
         .addr_type = BLE_GAP_ADDR_TYPE_PUBLIC,
     };
-    memcpy(peer_addr.addr, addr, sizeof(peer_addr.addr));
+    memcpy(peer_addr.addr, addr, BLE_GAP_ADDR_LEN);
     _conn_param.conn_sup_timeout = (uint16_t )(timeout_sec * 100);
+    nrf_ble_scan_stop();
     return sd_ble_gap_connect(&peer_addr, &_scan_param, &_conn_param, APP_BLE_CONN_CFG_TAG);
 }
 
@@ -377,7 +516,7 @@ std::string_view get_scan_adv_name(const uint8_t adv_data[], uint8_t adv_len) {
     return {(char *)res.data(), res.size()};
 }
 
-int send(uint16_t char_handle, void * data, uint16_t length) {
+int send(uint16_t char_handle, const void * data, uint16_t length) {
     nrf_ble_gq_req_t write_req;
     memset(&write_req, 0, sizeof(nrf_ble_gq_req_t));
     // 检查数据长度是否正确
@@ -404,7 +543,7 @@ int send(uint16_t char_handle, void * data, uint16_t length) {
     return nrf_ble_gq_item_add(&_ble_gatt_queue, &write_req, _profile.srv_conn_handle);
 }
 
-int send(void * data, uint16_t length) {
+int send(const void * data, uint16_t length) {
     return send(_profile.characteristic.char_handle, data, length);
 }
 
@@ -484,6 +623,7 @@ static int ble_stack_init(void) {
 
 int init() {
     ret_code_t err_code;
+	APP_SCHED_INIT(1024, 20);
     // 初始化蓝牙协议栈
     ble_stack_init();
     err_code = nrf_ble_gatt_init(&_gatt_inst, gatt_evt_handler);
@@ -491,22 +631,17 @@ int init() {
     err_code = nrf_ble_gatt_att_mtu_central_set(&_gatt_inst, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
     APP_ERROR_CHECK(err_code);
     // 注册BLE事件回调函数
-    NRF_SDH_BLE_OBSERVER(m_gap_obs, APP_BLE_BAP_OBSERVER_PRIO, ble_gap_evt_handler, NULL);
-    NRF_SDH_BLE_OBSERVER(m_gatt_obs, APP_BLE_GATT_OBSERVER_PRIO, ble_observer_evt_handler, &_profile);
+    NRF_SDH_BLE_OBSERVER(m_gap_obs, APP_BLE_BAP_OBSERVER_PRIO, ble_gap_evt_handler, nullptr);
+    NRF_SDH_BLE_OBSERVER(m_gatt_obs, APP_BLE_GATT_OBSERVER_PRIO, ble_observer_evt_handler, nullptr);
     _profile.conn_handle = BLE_CONN_HANDLE_INVALID;
     _profile.srv_conn_handle = BLE_CONN_HANDLE_INVALID;
+    _profile.srv_uuid = BLE_UUID_UNKNOWN;
     // 将自定义的UUID基数写入到协议栈
     err_code = sd_ble_uuid_vs_add(&GATT_BASE_UUID, &_profile.uuid_type);
     APP_ERROR_CHECK(err_code);
-
-    ble_db_discovery_init_t db_init = {
-        .evt_handler = db_disc_handler,
-        .p_gatt_queue = &_ble_gatt_queue,
-    };
-    // 初始化DB发现模块
-    err_code = ble_db_discovery_init(&db_init);
-    APP_ERROR_CHECK(err_code);
     ble_scan_init();
+    _timer_handle.create(database_task, Wrapper::AppTimer::CALL_IMMEDIATE, &_db_event);
+    _task_handle.create(app_scheduler_process, Wrapper::AppTimer::CALL_IMMEDIATE);
     NRF_LOG_INFO("init success.");
     return err_code;
 }

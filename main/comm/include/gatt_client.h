@@ -52,18 +52,44 @@ struct CharHandle {
     uint16_t cccd_handle;       /**< Handle of the CCCD of the characteristic as provided by a discovery. */
 };
 
+// 特征值信息
+struct CharacteristicProperty {
+    uint16_t uuid;           // 特征UUID
+    uint16_t handle;         // 特征声明句柄
+    uint16_t value_handle;   // 特征值句柄
+    uint8_t properties;      // 特征属性
+    uint16_t cccd_handle;    // 描述符句柄
+};
+
+// 服务信息
+struct ServiceProperty {
+    uint16_t uuid;           // 服务UUID
+    uint16_t start_handle;   // 服务起始句柄
+    uint16_t end_handle;     // 服务结束句柄
+    CharacteristicProperty characteristics[5]; // 特征数组
+    uint16_t char_count;      // 特征数量
+};
+
+// 设备GATT数据库
+struct GattDatabase {
+    ServiceProperty services[5]; // 服务数组
+    uint16_t service_count;      // 服务数量
+    uint16_t conn_handle;        // 连接句柄
+};
+
 using EvtCallback = void (*)(EvtType evt, uint16_t handle);
 using ScanCallback = void (*)(AdvReport report);
 using RecvCallback = void (*)(uint16_t handle, const uint8_t *data, uint16_t len);
-using DbDisCallback = void (*)(uint16_t srv_uuid, CharHandle char_uuid[], uint16_t count);
+using DbDisCallback = void (*)(GattDatabase* database);
 
 int init();
 
 int discovery_service(uint16_t srv_uuid);
 int discovery_device(std::string_view dev_name);
+int primay_serivce_discover();
 
-int send(uint16_t char_handle, void * data, uint16_t length);
-int send(void * data, uint16_t length);
+int send(uint16_t char_handle, const void * data, uint16_t length);
+int send(const void * data, uint16_t length);
 
 int register_conn_handle(uint16_t conn_handle);
 

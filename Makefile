@@ -48,6 +48,7 @@ SRC_FILES += \
 	$(SDK_ROOT)/components/libraries/usbd/app_usbd.c \
 	$(SDK_ROOT)/components/libraries/cli/cdc_acm/nrf_cli_cdc_acm.c \
 	$(SDK_ROOT)/components/libraries/cli/nrf_cli.c \
+	$(SDK_ROOT)/components/libraries/scheduler/app_scheduler.c \
 	$(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
 	$(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
 	$(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
@@ -112,6 +113,7 @@ INC_FOLDERS += \
 	-I$(SDK_ROOT)/components/libraries/sortlist \
 	-I$(SDK_ROOT)/components/libraries/strerror \
 	-I$(SDK_ROOT)/components/libraries/atomic_flags \
+	-I$(SDK_ROOT)/components/libraries/scheduler \
 	-I$(SDK_ROOT)/components/softdevice/s140/headers/nrf52 \
 	-I$(SDK_ROOT)/components/softdevice/s140/headers \
 	-I$(SDK_ROOT)/components/softdevice/common \
@@ -131,6 +133,7 @@ INC_FOLDERS += \
 
 CPP_FILES += \
 	main/driver/timer.cpp \
+	main/driver/utils.cpp \
 	main/driver/pwm.cpp \
 	main/periph/led.cpp \
 	main/comm/gatt_client.cpp \

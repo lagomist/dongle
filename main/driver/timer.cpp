@@ -131,7 +131,9 @@ int Task::create(Action task, uint32_t period, void *param, int count) {
 void Task::activate() {
     if (_handle == nullptr) return;
     InstanceList *handle = (InstanceList *)_handle;
-    handle->content.active = 1;
+    if (handle->content.count != 0) {
+        handle->content.active = 1;
+    }
 }
 
 void Task::suspend() {
@@ -214,7 +216,9 @@ int Timer::create(Action cb, uint32_t period, void *param, int count) {
 void Timer::start() {
     if (_handle == nullptr) return;
     InstanceList *handle = (InstanceList *)_handle;
-    handle->content.active = 1;
+    if (handle->content.count != 0) {
+        handle->content.active = 1;
+    }
 }
 
 void Timer::restart() {

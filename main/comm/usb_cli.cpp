@@ -1,5 +1,6 @@
 #include "usb_cli.h"
 #include "timer.h"
+#include "utils.h"
 #include "nrfx_clock.h"
 #include "nrf_delay.h"
 #include "app_error.h"
@@ -68,10 +69,12 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
     }
 }
 
-
-int write(const char data[], size_t length) {
-	if (!_usb_connected) return -1;
-	nrf_cli_print_stream(&_usb_cdc_cli, data, length);
+int option_printf(const char format[], ...) {
+	va_list args;
+	va_start(args, format);
+	auto out = Utils::vsprint(format, args);
+	va_end(args);
+	nrf_cli_fprintf(&_usb_cdc_cli, NRF_CLI_OPTION, out.data());
 	return 0;
 }
 
