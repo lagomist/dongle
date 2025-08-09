@@ -95,6 +95,7 @@ int register_conn_handle(uint16_t conn_handle);
 
 int notif_config(uint16_t cccd_handle, bool notification_enable);
 int notif_enable();
+int mtu_request(uint16_t mtu);
 void scan_start(uint16_t timeout_sec = 0);
 int connection(uint8_t addr[6], uint16_t timeout_sec);
 int disconnection();

@@ -27,8 +27,6 @@ namespace BLE {
 
 namespace Client {
 
-#define OPCODE_LENGTH 1
-#define HANDLE_LENGTH 2
 #ifndef NRF_BLE_GQ_QUEUE_SIZE
 #define NRF_BLE_GQ_QUEUE_SIZE 4
 #endif
@@ -45,6 +43,11 @@ constexpr static const uint16_t APP_BLE_SCAN_WINDOW     = 160;      // 扫描时
 
 constexpr static const uint16_t APP_MIN_CONNECTION_INTERVAL     = MSEC_TO_UNITS(7.5, UNIT_1_25_MS);
 constexpr static const uint16_t APP_MAX_CONNECTION_INTERVAL     = MSEC_TO_UNITS(30, UNIT_1_25_MS);
+
+
+constexpr static const uint16_t GENE_ATTR_UUID = 0x1801;
+constexpr static const uint16_t GENE_ACCESS_UUID = 0x1800;
+constexpr static const uint16_t CCCD_UUID = 0x2902;
 
 struct gattc_profile {
     uint8_t         uuid_type;        // UUID 类型
@@ -75,7 +78,7 @@ NRF_BLE_GQ_DEF(_ble_gatt_queue, NRF_SDH_BLE_CENTRAL_LINK_COUNT, NRF_BLE_GQ_QUEUE
 NRF_BLE_SCAN_DEF(_scan_inst);
 BLE_DB_DISCOVERY_DEF(_db_disc);
 
-static uint16_t _gattc_max_data_len = (NRF_SDH_BLE_GATT_MAX_MTU_SIZE - OPCODE_LENGTH - HANDLE_LENGTH);
+static uint16_t _gattc_max_data_len = 23;
 
 static ble_gap_scan_params_t _scan_param = {
     .active        = 0x01,
@@ -103,10 +106,9 @@ static void app_scheduler_process(void *arg) {
 }
 
 static void database_task(void *arg) {
-    // DBEvent event = *(DBEvent *)arg;
     switch (_db_event) {
     case DBEvent::PRIMARY_SRV_RSP: {
-        NRF_LOG_INFO("PRIMARY_SRV_RSP");
+        NRF_LOG_DEBUG("PRIMARY_SRV_RSP");
         for (uint16_t i = 0; i < _database.service_count; i++) {
             if (_database.services[i].char_count == 0) {
                 // 启动特征发现
@@ -122,7 +124,7 @@ static void database_task(void *arg) {
         break;
     }
     case DBEvent::CHAR_DISC_RSP: {
-        NRF_LOG_INFO("CHAR_DISC_RSP");
+        NRF_LOG_DEBUG("CHAR_DISC_RSP");
         for (uint16_t i = 0; i < _database.service_count; i++) {
             CharacteristicProperty * char_property = _database.services[i].characteristics;
             for (uint16_t j = 0; j < _database.services[i].char_count; j++) {
@@ -142,7 +144,7 @@ static void database_task(void *arg) {
     }
     case DBEvent::DESC_DISC_RSP: {
         uint16_t index = 0;
-        NRF_LOG_INFO("DESC_DISC_RSP");
+        NRF_LOG_DEBUG("DESC_DISC_RSP");
         for (index = 0; index < _database.service_count; index++) {
             if (_database.services[index].char_count == 0) {
                 // 启动特征发现
@@ -175,7 +177,7 @@ static void on_primary_srv_discovery_rsp(ble_gattc_evt_prim_srvc_disc_rsp_t cons
     for (uint16_t i = 0; i < p_services->count; i++) {
         const ble_gattc_service_t *p_service = &p_services->services[i];
         if (p_service->uuid.type == BLE_UUID_TYPE_BLE) {
-            if (p_service->uuid.uuid != 0x1800 && p_service->uuid.uuid != 0x1801) {
+            if (p_service->uuid.uuid != GENE_ATTR_UUID && p_service->uuid.uuid != GENE_ACCESS_UUID) {
                 _database.services[_database.service_count].uuid = p_service->uuid.uuid;
                 _database.services[_database.service_count].start_handle = p_service->handle_range.start_handle;
                 _database.services[_database.service_count].end_handle = p_service->handle_range.end_handle;
@@ -221,9 +223,16 @@ static void on_descriptor_discovery_rsp(ble_gattc_evt_desc_disc_rsp_t const *p_d
     for (uint16_t i = 0; i < _database.service_count; i++) {
         CharacteristicProperty * chars = _database.services[i].characteristics;
         if (chars[0].cccd_handle == BLE_GATT_HANDLE_INVALID) {
-            uint16_t descs_count = std::min(p_descs->count, _database.services[i].char_count);
-            for (int j = 0; j < descs_count; j++) {
-                chars[j].cccd_handle = p_descs->descs[j].handle;
+            uint8_t idx = 0;
+            for (int j = 0; j < p_descs->count; j++) {
+                if (p_descs->descs[j].uuid.uuid == CCCD_UUID) {
+                    chars[idx].cccd_handle = p_descs->descs[j].handle;
+                    idx++;
+                    if (idx >= 5) {
+                        break;
+                    }
+                }
+                NRF_LOG_DEBUG("find descriptor UUID: 0x%04X", p_descs->descs[j].uuid.uuid);
             }
             break;
         }
@@ -420,8 +429,7 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
 static void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt) {
     // 如果是MTU交换事件
     if (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED) {
-        // 设置GATT通信服务的有效数据长度（MTU-opcode-handle=MTU大小-1-2）
-        _gattc_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
+        _gattc_max_data_len = p_evt->params.att_mtu_effective;
         NRF_LOG_DEBUG("Ble transmit max data length set to %d byte", _gattc_max_data_len);
     }
 }
@@ -462,6 +470,13 @@ int notif_config(uint16_t cccd_handle, bool notification_enable) {
 
 int notif_enable() {
     return notif_config(_profile.characteristic.cccd_handle, true);
+}
+
+int mtu_request(uint16_t mtu) {
+    if (_profile.conn_handle == BLE_CONN_HANDLE_INVALID) {
+        return -1;
+    }
+    return sd_ble_gattc_exchange_mtu_request(_profile.conn_handle, mtu);
 }
 
 int connection(uint8_t addr[6], uint16_t timeout_sec) {

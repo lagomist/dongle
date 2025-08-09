@@ -94,7 +94,8 @@ int write(const char *p_fmt, ...) {
 }
 
 static void process(void *arg) {
-	nrf_cli_process(&_usb_cdc_cli);
+	nrf_cli_t *cdc_cli_inst = (nrf_cli_t *)arg;
+	nrf_cli_process(cdc_cli_inst);
 }
 
 /**
@@ -121,7 +122,7 @@ int init(void) {
 	ret = nrf_cli_init(&_usb_cdc_cli, NULL, true, false, NRF_LOG_SEVERITY_NONE);
     APP_ERROR_CHECK(ret);
 
-	_task_handle.create(process, Wrapper::AppTimer::CALL_IMMEDIATE);
+	_task_handle.create(process, Wrapper::AppTimer::CALL_IMMEDIATE, &_usb_cdc_cli);
 	_task_handle.suspend();
 	
 	NRF_LOG_INFO("init success.");

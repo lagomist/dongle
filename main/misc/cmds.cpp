@@ -3,6 +3,7 @@
 #include "sdk_common.h"
 #include "usb_cli.h"
 #include "dongle.h"
+#include "utils.h"
 
 namespace cmds {
 
@@ -60,13 +61,13 @@ static void cmd_ble_scan(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
 static void cmd_ble_connect(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     CMD_ASSERT(argc >= 2);
-    std::string_view name({argv[1], strlen(argv[1])});
+    std::string name(argv[1]);
     uint16_t timeout = (argc == 3) ? atoi(argv[2]) : 5;
     int res = dongle::ble_connect(name, timeout);
     if (res == 0) {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s connecting ...\n", argv[1]);
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s connecting ...\n", name.data());
     } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "[%s] %s connection failed.\n", NRF_LOG_ERROR_STRING_GET(res), argv[1]);
+        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "[%s] %s connection failed.\n", NRF_LOG_ERROR_STRING_GET(res), name.data());
     }
 }
 
@@ -81,8 +82,13 @@ static void cmd_ble_select(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_ble_send(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    CMD_ASSERT(argc == 2);
-    if (dongle::ble_send(argv[1]) < 0) {
+    CMD_ASSERT(argc >= 2);
+    Utils::OBuf content;
+    for (size_t i = 0; i < argc - 1; i++) {
+        content += argv[1 + i];
+        content += ' ';
+    }
+    if (dongle::ble_send(content) < 0) {
         nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "Send failed.\n");
     }
 }
