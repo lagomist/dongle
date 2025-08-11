@@ -132,6 +132,7 @@ INC_FOLDERS += \
 	-I$(SDK_ROOT)/external/utf_converter \
 
 CPP_FILES += \
+	main/stubs/syscalls.cpp \
 	main/driver/timer.cpp \
 	main/driver/utils.cpp \
 	main/driver/pwm.cpp \

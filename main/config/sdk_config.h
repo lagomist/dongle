@@ -5952,7 +5952,7 @@
 #endif
 // <o> NRF_CLI_HISTORY_ELEMENT_SIZE - Size of one memory object reserved for CLI history. 
 #ifndef NRF_CLI_HISTORY_ELEMENT_SIZE
-#define NRF_CLI_HISTORY_ELEMENT_SIZE 32
+#define NRF_CLI_HISTORY_ELEMENT_SIZE 256
 #endif
 
 // <o> NRF_CLI_HISTORY_ELEMENT_COUNT - Number of history memory objects. 
@@ -9840,7 +9840,7 @@
 
 // <o> NRF_SDH_BLE_GATT_MAX_MTU_SIZE - Static maximum MTU size. 
 #ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
-#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 515
+#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 512
 #endif
 
 // <o> NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE - Attribute Table size in bytes. The size must be a multiple of 4. 

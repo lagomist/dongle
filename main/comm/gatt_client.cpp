@@ -62,6 +62,8 @@ struct gattc_profile {
 };
 
 enum DBEvent : uint8_t {
+    MTU_EXCHANGE,
+    SERVICE_DISCOVER,
     PRIMARY_SRV_RSP,
     CHAR_DISC_RSP,
     DESC_DISC_RSP
@@ -107,6 +109,15 @@ static void app_scheduler_process(void *arg) {
 
 static void database_task(void *arg) {
     switch (_db_event) {
+    case DBEvent::MTU_EXCHANGE: {
+        
+        break;
+    }
+    case DBEvent::SERVICE_DISCOVER : {
+        int err_code = primay_serivce_discover();
+        APP_ERROR_CHECK(err_code);
+        break;
+    }
     case DBEvent::PRIMARY_SRV_RSP: {
         NRF_LOG_DEBUG("PRIMARY_SRV_RSP");
         for (uint16_t i = 0; i < _database.service_count; i++) {
@@ -255,9 +266,10 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
             
             err_code = register_conn_handle(p_ble_evt->evt.gap_evt.conn_handle);
             APP_ERROR_CHECK(err_code);
+
             // 启动所有服务发现
-            err_code = primay_serivce_discover();
-            APP_ERROR_CHECK(err_code);
+            _db_event = DBEvent::SERVICE_DISCOVER;
+            _timer_handle.restart();
 
             _current_evt = EvtType::CONNECTED_EVT;
             if (_profile.evt_handler != nullptr)
@@ -336,7 +348,6 @@ static void ble_observer_evt_handler(ble_evt_t const * p_ble_evt, void * p_conte
         case BLE_GATTC_EVT_HVX: {
             // 通知或指示事件
             NRF_LOG_DEBUG("BLE_GATTC_EVT_HVX");
-            if (_profile.recv_handler == nullptr) return;
             uint16_t handle = p_ble_evt->evt.gattc_evt.params.hvx.handle;
             const uint8_t *p_data = p_ble_evt->evt.gattc_evt.params.hvx.data;
             uint16_t data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
@@ -476,7 +487,11 @@ int mtu_request(uint16_t mtu) {
     if (_profile.conn_handle == BLE_CONN_HANDLE_INVALID) {
         return -1;
     }
-    return sd_ble_gattc_exchange_mtu_request(_profile.conn_handle, mtu);
+    int err_code = sd_ble_gattc_exchange_mtu_request(_profile.conn_handle, mtu);
+    if (err_code == NRF_SUCCESS) {
+        _gattc_max_data_len = mtu;
+    }
+    return err_code;
 }
 
 int connection(uint8_t addr[6], uint16_t timeout_sec) {

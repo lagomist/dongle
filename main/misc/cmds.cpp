@@ -83,10 +83,10 @@ static void cmd_ble_select(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
 static void cmd_ble_send(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     CMD_ASSERT(argc >= 2);
-    Utils::OBuf content;
-    for (size_t i = 0; i < argc - 1; i++) {
-        content += argv[1 + i];
+    Utils::OBuf content = argv[1];
+    for (size_t i = 1; i < argc - 1; i++) {
         content += ' ';
+        content += argv[1 + i];
     }
     if (dongle::ble_send(content) < 0) {
         nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "Send failed.\n");

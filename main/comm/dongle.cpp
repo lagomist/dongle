@@ -18,6 +18,7 @@ static Wrapper::BLE::Client::AdvReport _scan_dev_list[SCAN_MAX_BUF_NUM];
 static Wrapper::BLE::Client::AdvReport _target_device;
 static Wrapper::BLE::Client::CharHandle _char_handle;
 static Wrapper::BLE::Client::GattDatabase* _database = nullptr;
+static char _rx_buffer[520];
 
 static int database_find_chars(uint16_t char_uuid, Wrapper::BLE::Client::CharHandle &chars) {
 	if (_database == nullptr) return -1;
@@ -58,7 +59,9 @@ static void db_callback(Wrapper::BLE::Client::GattDatabase* database) {
 }
 
 static void ble_recv_callback(uint16_t handle, const uint8_t *data, uint16_t len) {
-	usb_cli::write({(char *)data, (size_t )len});
+	std::memcpy(_rx_buffer, data, len);
+	_rx_buffer[len] = '\0';
+	usb_cli::write("Ble receive len: %d, data:\n%s\n", len, _rx_buffer);
 }
 
 static void dongle_task(void *arg) {
