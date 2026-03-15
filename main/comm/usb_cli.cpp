@@ -12,6 +12,8 @@
 #include "app_usbd_cdc_acm.h"
 #include "nrf_cli_cdc_acm.h"
 #include "nrf_cli.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_backend_interface.h"
 #include <stdint.h>
 #include <string.h>
 #define NRF_LOG_MODULE_NAME usb_cdc
@@ -24,6 +26,9 @@ constexpr static uint8_t const CLI_LOG_QUEUE_SIZE = 5;
 
 static Wrapper::AppTimer::Task _task_handle;
 static bool _usb_connected = false;
+static bool _cli_started = false;
+static bool _usb_log_requested = false;
+static int32_t _usb_log_backend_id = NRF_LOG_BACKEND_INVALID_ID;
 
 /** @brief Command line interface instance */
 NRF_CLI_CDC_ACM_DEF(_cli_cdc_acm_transport);
@@ -58,15 +63,31 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
             break;
         case APP_USBD_EVT_POWER_REMOVED:
 			_usb_connected = false;
+			nrf_log_backend_disable(_usb_cdc_cli.p_log_backend);
             app_usbd_stop();
             break;
         case APP_USBD_EVT_POWER_READY:
 			_usb_connected = true;
             app_usbd_start();
+			if (_usb_log_requested && _cli_started) {
+				nrf_log_backend_enable(_usb_cdc_cli.p_log_backend);
+			}
             break;
         default:
             break;
     }
+}
+
+static void usb_log_backend_register(void) {
+	if (_usb_log_backend_id != NRF_LOG_BACKEND_INVALID_ID) {
+		return;
+	}
+
+	_usb_log_backend_id = nrf_log_backend_add(_usb_cdc_cli.p_log_backend, NRF_LOG_SEVERITY_DEBUG);
+	if (_usb_log_backend_id < 0) {
+		APP_ERROR_CHECK(NRF_ERROR_NO_MEM);
+	}
+	nrf_log_backend_disable(_usb_cdc_cli.p_log_backend);
 }
 
 int option_printf(const char format[], ...) {
@@ -91,6 +112,23 @@ int write(const char *p_fmt, ...) {
     
     va_end(args);
     return 0;
+}
+
+void set_log_output(bool enable) {
+	_usb_log_requested = enable;
+	if (_usb_log_backend_id == NRF_LOG_BACKEND_INVALID_ID) {
+		return;
+	}
+	if (enable && _usb_connected && _cli_started) {
+		nrf_log_backend_enable(_usb_cdc_cli.p_log_backend);
+	} else {
+		nrf_log_backend_disable(_usb_cdc_cli.p_log_backend);
+	}
+}
+
+bool log_output_enabled() {
+	return (_usb_log_backend_id != NRF_LOG_BACKEND_INVALID_ID) &&
+				nrf_log_backend_is_enabled(_usb_cdc_cli.p_log_backend);
 }
 
 static void process(void *arg) {
@@ -121,6 +159,7 @@ int init(void) {
 
 	ret = nrf_cli_init(&_usb_cdc_cli, NULL, true, false, NRF_LOG_SEVERITY_NONE);
     APP_ERROR_CHECK(ret);
+	usb_log_backend_register();
 
 	_task_handle.create(process, Wrapper::AppTimer::CALL_IMMEDIATE, &_usb_cdc_cli);
 	_task_handle.suspend();
@@ -140,6 +179,8 @@ void enable() {
 	nrf_delay_ms(1000);
 	ret = nrf_cli_start(&_usb_cdc_cli);
     APP_ERROR_CHECK(ret);
+	_cli_started = true;
+	set_log_output(_usb_log_requested);
 	_task_handle.activate();
 	NRF_LOG_INFO("enabled.");
 }

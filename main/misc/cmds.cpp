@@ -121,6 +121,43 @@ static void cmd_ble_disconnect(nrf_cli_t const * p_cli, size_t argc, char **argv
     nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "disconnected.\n");
 }
 
+static void cmd_usb(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if ((argc == 1) || nrf_cli_help_requested(p_cli)) {
+        nrf_cli_help_print(p_cli, NULL, 0);
+        return;
+    }
+    nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "%s unknown option\n", argv[1]);
+}
+
+static void cmd_usb_log(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if ((argc == 1) || nrf_cli_help_requested(p_cli)) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "usb log command must be on/off/status\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "on") == 0) {
+        usb_cli::set_log_output(true);
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "usb log output enabled\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "off") == 0) {
+        usb_cli::set_log_output(false);
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "usb log output disabled\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "status") == 0) {
+        nrf_cli_fprintf(p_cli,
+                        NRF_CLI_NORMAL,
+                        "usb log output: %s\n",
+                        usb_cli::log_output_enabled() ? "enabled" : "disabled");
+        return;
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "usb log command must be on/off/status\n");
+}
+
 NRF_CLI_CMD_REGISTER(nordic, nullptr, "Print Nordic Semiconductor logo.", cmd_nordic);
 NRF_CLI_CPP_CREATE_STATIC_SUBCMD_SET(m_sub_ble,
     NRF_CLI_CMD(scan,   nullptr, "Scan ble device.", cmd_ble_scan),
@@ -131,5 +168,11 @@ NRF_CLI_CPP_CREATE_STATIC_SUBCMD_SET(m_sub_ble,
     NRF_CLI_SUBCMD_SET_END
 );
 NRF_CLI_CMD_REGISTER(ble, &m_sub_ble, "ble host interface", cmd_ble);
+
+NRF_CLI_CPP_CREATE_STATIC_SUBCMD_SET(m_sub_usb,
+    NRF_CLI_CMD(log, nullptr, "Control USB log output.", cmd_usb_log),
+    NRF_CLI_SUBCMD_SET_END
+);
+NRF_CLI_CMD_REGISTER(usb, &m_sub_usb, "usb interface", cmd_usb);
 
 }
