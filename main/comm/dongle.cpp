@@ -20,6 +20,44 @@ static Wrapper::BLE::Client::CharHandle _char_handle;
 static Wrapper::BLE::Client::GattDatabase* _database = nullptr;
 static char _rx_buffer[520];
 
+static const char *device_name(Wrapper::BLE::Client::AdvReport const &report) {
+	return report.has_name ? report.name : "Unknown";
+}
+
+static bool peer_addr_equal(Wrapper::BLE::Client::AdvReport::PeerAddress const &lhs,
+					 Wrapper::BLE::Client::AdvReport::PeerAddress const &rhs) {
+	return (lhs.type == rhs.type) &&
+			(std::memcmp(lhs.addr, rhs.addr, sizeof(lhs.addr)) == 0);
+}
+
+static int scan_list_find_by_addr(Wrapper::BLE::Client::AdvReport::PeerAddress const &peer_addr) {
+	for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
+		if (_scan_dev_list[i].valid && peer_addr_equal(_scan_dev_list[i].peer_addr, peer_addr)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int scan_list_find_empty() {
+	for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
+		if (!_scan_dev_list[i].valid) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int scan_list_find_by_mac(uint8_t const addr[Wrapper::BLE::Client::AdvReport::PeerAddress::ADDR_LEN]) {
+	for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
+		if (_scan_dev_list[i].valid &&
+				(std::memcmp(addr, _scan_dev_list[i].peer_addr.addr, Wrapper::BLE::Client::AdvReport::PeerAddress::ADDR_LEN) == 0)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 static int database_find_chars(uint16_t char_uuid, Wrapper::BLE::Client::CharHandle &chars) {
 	if (_database == nullptr) return -1;
 	for (int i = 0; i < _database->service_count; i++) {
@@ -41,15 +79,20 @@ static void ble_evt_callback(Wrapper::BLE::Client::EvtType evt, uint16_t handle)
 }
 
 static void scan_callback(Wrapper::BLE::Client::AdvReport report) {
-	if (strlen(report.name) <= 0) return;
-
-	for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
-		if (strcmp(_scan_dev_list[i].name, report.name) == 0) break;
-		if (_scan_dev_list[i].addr[0] == 0) {
-			_scan_dev_list[i] = report;
-			break;
-		}
+	int index = scan_list_find_by_addr(report.peer_addr);
+	if (index < 0) {
+		index = scan_list_find_empty();
 	}
+	if (index < 0) {
+		return;
+	}
+
+	if (_scan_dev_list[index].valid && _scan_dev_list[index].has_name && !report.has_name) {
+		report.has_name = true;
+		std::memcpy(report.name, _scan_dev_list[index].name, sizeof(report.name));
+	}
+
+	_scan_dev_list[index] = report;
 }
 
 static void db_callback(Wrapper::BLE::Client::GattDatabase* database) {
@@ -68,20 +111,24 @@ static void dongle_task(void *arg) {
 	usb_cli::option_printf("\nBle %s\n", Wrapper::BLE::Client::evt_to_str(_status).data());
 	switch (_status) {
 	case Wrapper::BLE::Client::EvtType::SCAN_TIMEOUT_EVT:
-		usb_cli::write("%-32s %-17s    %s\n", "Name", "Addr", "Rssi");
-		for (int i = 0; (i < SCAN_MAX_BUF_NUM) && (_scan_dev_list[i].addr[0] != 0); i++) {
-			usb_cli::write("%-32s %02X:%02X:%02X:%02X:%02X:%02X    %d\n",
-							_scan_dev_list[i].name,
-							_scan_dev_list[i].addr[5], _scan_dev_list[i].addr[4], _scan_dev_list[i].addr[3],
-							_scan_dev_list[i].addr[2], _scan_dev_list[i].addr[1], _scan_dev_list[i].addr[0],
+		usb_cli::write("%-32s %-17s  %-7s %s\n", "Name", "Addr", "Type", "Rssi");
+		for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
+			if (!_scan_dev_list[i].valid) {
+				continue;
+			}
+			usb_cli::write("%-32s %02X:%02X:%02X:%02X:%02X:%02X  %-7d %d\n",
+							device_name(_scan_dev_list[i]),
+							_scan_dev_list[i].peer_addr.addr[5], _scan_dev_list[i].peer_addr.addr[4], _scan_dev_list[i].peer_addr.addr[3],
+							_scan_dev_list[i].peer_addr.addr[2], _scan_dev_list[i].peer_addr.addr[1], _scan_dev_list[i].peer_addr.addr[0],
+							_scan_dev_list[i].peer_addr.type,
 							_scan_dev_list[i].rssi);
 		}
 		break;
 	case Wrapper::BLE::Client::EvtType::CONNECT_TIMEOUT_EVT:
-		usb_cli::write("%s connect failed.\n", _target_device.name);
+		usb_cli::write("%s connect failed.\n", device_name(_target_device));
 		break;
 	case Wrapper::BLE::Client::EvtType::CONNECTED_EVT:
-		usb_cli::write("%s connected.\n", _target_device.name);
+		usb_cli::write("%s connected.\n", device_name(_target_device));
 		break;
 	case Wrapper::BLE::Client::EvtType::SERVICE_DISCOVER_EVT:
 		for (int srv_index = 0; srv_index < _database->service_count; srv_index++) {
@@ -107,29 +154,28 @@ void ble_scan(uint16_t timeout) {
 int ble_connect(std::string_view name, uint16_t timeout) {
 	bool find = false;
 	memset(&_char_handle, 0, sizeof(_char_handle));
-	uint8_t mac_addr[6] = {0};
 	unsigned int tmp[6];
 	int res = sscanf(name.data(), "%02X:%02X:%02X:%02X:%02X:%02X", 
 					&tmp[5], &tmp[4], &tmp[3], &tmp[2], &tmp[1], &tmp[0]);
 	if (res == 6) {
+		uint8_t mac_addr[Wrapper::BLE::Client::AdvReport::PeerAddress::ADDR_LEN] = {};
 		for (int i = 0; i < 6; i++) {
 			mac_addr[i] = (uint8_t)tmp[i];
 		}
-		// 地址格式，检验是否在扫描列表里
-		for (int i = 0; (i < SCAN_MAX_BUF_NUM) && (_scan_dev_list[i].addr[0] != 0); i++) {
-			if (std::memcmp(mac_addr, _scan_dev_list[i].addr, sizeof(mac_addr)) == 0) {
-				_target_device = _scan_dev_list[i];
-				find = true;
-				break;
-			}
+		int index = scan_list_find_by_mac(mac_addr);
+		if (index >= 0) {
+			_target_device = _scan_dev_list[index];
+			find = true;
 		}
 
 	} else {
 		// 设备名格式，查找扫描列表获取地址
-		for (int i = 0; (i < SCAN_MAX_BUF_NUM) && (_scan_dev_list[i].addr[0] != 0); i++) {
+		for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
+			if (!_scan_dev_list[i].valid || !_scan_dev_list[i].has_name) {
+				continue;
+			}
 			if (std::strcmp(_scan_dev_list[i].name, name.data()) == 0) {
 				_target_device = _scan_dev_list[i];
-				std::memcpy(mac_addr, _scan_dev_list[i].addr, sizeof(mac_addr));
 				find = true;
 				break;
 			}
@@ -139,7 +185,7 @@ int ble_connect(std::string_view name, uint16_t timeout) {
 	if (!find) {
 		return -1;
 	}
-	return Wrapper::BLE::Client::connection(mac_addr, timeout);
+	return Wrapper::BLE::Client::connection(_target_device.peer_addr, timeout);
 }
 
 int ble_select(uint16_t char_uuid) {

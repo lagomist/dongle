@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -41,7 +42,15 @@ constexpr std::string_view evt_to_str(EvtType evt) {
 
 struct AdvReport {
     char name[32];
-    uint8_t addr[6];
+    struct PeerAddress {
+        static constexpr size_t ADDR_LEN = 6;
+
+        uint8_t addr[ADDR_LEN];
+        uint8_t type;
+    } peer_addr;
+    bool valid;
+    bool has_name;
+    bool scan_response;
     int8_t tx_power;
     int8_t rssi;
 };
@@ -97,7 +106,7 @@ int notif_config(uint16_t cccd_handle, bool notification_enable);
 int notif_enable();
 int mtu_request(uint16_t mtu);
 void scan_start(uint16_t timeout_sec = 0);
-int connection(uint8_t addr[6], uint16_t timeout_sec);
+int connection(AdvReport::PeerAddress const &peer_addr, uint16_t timeout_sec);
 int disconnection();
 
 void register_evt_callback(EvtCallback cb);
@@ -106,7 +115,7 @@ void register_recv_callback(RecvCallback cb);
 void register_db_callback(DbDisCallback cb);
 
 // std::vector<uint8_t> adv_data_prase(uint8_t type, const uint8_t adv_data[], uint8_t adv_len);
-std::string_view get_scan_adv_name(const uint8_t adv_data[], uint8_t adv_len);
+bool get_scan_adv_name(const uint8_t adv_data[], uint8_t adv_len, char name[], size_t name_len);
 
 } /* Client */
 

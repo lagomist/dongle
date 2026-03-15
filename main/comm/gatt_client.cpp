@@ -13,8 +13,9 @@
 #include "nrf_ble_gatt.h"
 #include "app_scheduler.h"
 #include "app_error.h"
-#include <vector>
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string_view>
 
 #define NRF_LOG_MODULE_NAME gatt_client
@@ -38,8 +39,8 @@ namespace Client {
 // 定义GATT 128位UUID基数
 constexpr static const ble_uuid128_t GATT_BASE_UUID = {0x40, 0xE3, 0x4A, 0x1D, 0xC2, 0x5F, 0xB0, 0x9C, 0xB7, 0x47, 0xE6, 0x43, 0x00, 0x00, 0x53, 0x86};
 constexpr static const uint8_t APP_BLE_CONN_CFG_TAG = 1;
-constexpr static const uint16_t APP_BLE_SCAN_INTERVAL   = 512;      // 扫描间隔(*0.625)320ms
-constexpr static const uint16_t APP_BLE_SCAN_WINDOW     = 160;      // 扫描时间(*0.625)100ms
+constexpr static const uint16_t APP_BLE_SCAN_INTERVAL   = NRF_BLE_SCAN_SCAN_INTERVAL;
+constexpr static const uint16_t APP_BLE_SCAN_WINDOW     = NRF_BLE_SCAN_SCAN_WINDOW;
 
 constexpr static const uint16_t APP_MIN_CONNECTION_INTERVAL     = MSEC_TO_UNITS(7.5, UNIT_1_25_MS);
 constexpr static const uint16_t APP_MAX_CONNECTION_INTERVAL     = MSEC_TO_UNITS(30, UNIT_1_25_MS);
@@ -97,6 +98,69 @@ ble_gap_conn_params_t _conn_param = {
     .slave_latency     = NRF_BLE_SCAN_SLAVE_LATENCY,
     .conn_sup_timeout  = 500,
 };
+
+static bool adv_data_field_get(uint8_t type,
+                               const uint8_t adv_data[],
+                               uint8_t adv_len,
+                               const uint8_t **field_data,
+                               uint8_t *field_len) {
+    uint8_t index = 0;
+
+    while (index < adv_len) {
+        uint8_t data_len = adv_data[index];
+
+        if (data_len == 0) {
+            break;
+        }
+
+        if ((uint16_t)index + data_len >= adv_len) {
+            break;
+        }
+
+        if (adv_data[index + 1] == type) {
+            *field_data = &adv_data[index + 2];
+            *field_len = data_len - 1;
+            return true;
+        }
+
+        index += data_len + 1;
+    }
+
+    return false;
+}
+
+static void fill_adv_report(AdvReport *report, ble_gap_evt_adv_report_t const *p_adv) {
+    const uint8_t *field_data = nullptr;
+    uint8_t field_len = 0;
+
+    memset(report, 0, sizeof(*report));
+    report->valid = true;
+    report->scan_response = p_adv->type.scan_response;
+    memcpy(report->peer_addr.addr, p_adv->peer_addr.addr, sizeof(report->peer_addr.addr));
+    report->peer_addr.type = p_adv->peer_addr.addr_type;
+    report->tx_power = p_adv->tx_power;
+    report->rssi = p_adv->rssi;
+
+    bool has_name = adv_data_field_get(BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
+                                       p_adv->data.p_data,
+                                       p_adv->data.len,
+                                       &field_data,
+                                       &field_len);
+    if (!has_name) {
+        has_name = adv_data_field_get(BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME,
+                                      p_adv->data.p_data,
+                                      p_adv->data.len,
+                                      &field_data,
+                                      &field_len);
+    }
+
+    if (has_name && field_len > 0) {
+        size_t copy_len = std::min((size_t)field_len, sizeof(report->name) - 1);
+        memcpy(report->name, field_data, copy_len);
+        report->name[copy_len] = '\0';
+        report->has_name = true;
+    }
+}
 
 static void gatt_error_handler(uint32_t nrf_error, void * p_ctx, uint16_t conn_handle) {
     NRF_LOG_ERROR("A GATT Client error has occurred on conn_handle: 0X%X", conn_handle);
@@ -397,11 +461,12 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
             NRF_LOG_DEBUG("device name filter match");
             ble_gap_evt_adv_report_t const * p_adv = p_scan_evt->params.filter_match.p_adv_report;
             AdvReport report = {};
-            std::string_view adv_name = get_scan_adv_name(p_adv->data.p_data, p_adv->data.len);
-            memcpy(report.addr, p_adv->peer_addr.addr, sizeof(p_adv->peer_addr.addr));
-            strncpy(report.name, adv_name.data(), sizeof(report.name) - 1);
-            report.tx_power = p_adv->tx_power;
-            report.rssi = p_adv->rssi;
+            fill_adv_report(&report, p_adv);
+            NRF_LOG_DEBUG("scan match addr_type:%d rssi:%d len:%d scan_rsp:%d",
+                          report.peer_addr.type,
+                          report.rssi,
+                          p_adv->data.len,
+                          report.scan_response);
             if (_profile.scan_handler) {
                 _profile.scan_handler(report);
             }
@@ -409,16 +474,14 @@ static void ble_scan_evt_handler(scan_evt_t const * p_scan_evt) {
         }
 
         case NRF_BLE_SCAN_EVT_NOT_FOUND: {
-            if (p_scan_evt->params.p_not_found->type.scan_response) {
-                break;
-            }
             ble_gap_evt_adv_report_t const * p_adv = p_scan_evt->params.p_not_found;
             AdvReport report = {};
-            std::string_view adv_name = get_scan_adv_name(p_adv->data.p_data, p_adv->data.len);
-            memcpy(report.addr, p_adv->peer_addr.addr, sizeof(p_adv->peer_addr.addr));
-            strncpy(report.name, adv_name.data(), sizeof(report.name) - 1);
-            report.tx_power = p_adv->tx_power;
-            report.rssi = p_adv->rssi;
+            fill_adv_report(&report, p_adv);
+            NRF_LOG_DEBUG("scan report addr_type:%d rssi:%d len:%d scan_rsp:%d",
+                          report.peer_addr.type,
+                          report.rssi,
+                          p_adv->data.len,
+                          report.scan_response);
             if (_profile.scan_handler) {
                 _profile.scan_handler(report);
             }
@@ -494,16 +557,15 @@ int mtu_request(uint16_t mtu) {
     return err_code;
 }
 
-int connection(uint8_t addr[6], uint16_t timeout_sec) {
+int connection(AdvReport::PeerAddress const &peer_addr, uint16_t timeout_sec) {
     _current_evt = EvtType::CONNECTING_EVT;
-    ble_gap_addr_t peer_addr = {
-        .addr_id_peer = 0,
-        .addr_type = BLE_GAP_ADDR_TYPE_PUBLIC,
-    };
-    memcpy(peer_addr.addr, addr, BLE_GAP_ADDR_LEN);
     _conn_param.conn_sup_timeout = (uint16_t )(timeout_sec * 100);
     nrf_ble_scan_stop();
-    return sd_ble_gap_connect(&peer_addr, &_scan_param, &_conn_param, APP_BLE_CONN_CFG_TAG);
+    ble_gap_addr_t gap_addr = {};
+    memcpy(gap_addr.addr, peer_addr.addr, sizeof(gap_addr.addr));
+    gap_addr.addr_type = peer_addr.type;
+    NRF_LOG_INFO("connect addr_type:%d timeout:%d", peer_addr.type, timeout_sec);
+    return sd_ble_gap_connect(&gap_addr, &_scan_param, &_conn_param, APP_BLE_CONN_CFG_TAG);
 }
 
 int disconnection() {
@@ -511,39 +573,45 @@ int disconnection() {
 }
 
 void scan_start(uint16_t timeout_sec) {
+    ret_code_t err_code;
     _current_evt = EvtType::SCANTING_EVT;
     _scan_param.timeout = (uint16_t )(timeout_sec * 100);
-    nrf_ble_scan_params_set(&_scan_inst, &_scan_param);
-    nrf_ble_scan_start(&_scan_inst);
+    err_code = nrf_ble_scan_params_set(&_scan_inst, &_scan_param);
+    APP_ERROR_CHECK(err_code);
+    err_code = nrf_ble_scan_start(&_scan_inst);
+    APP_ERROR_CHECK(err_code);
 }
 
-std::vector<uint8_t> adv_data_prase(uint8_t type, const uint8_t adv_data[], uint8_t adv_len) {
-    uint8_t index = 0;
-    while (index < adv_len) {
-        uint8_t field_length = adv_data[index];
-        uint8_t field_type = adv_data[index + 1];
+bool get_scan_adv_name(const uint8_t adv_data[], uint8_t adv_len, char name[], size_t name_len) {
+    const uint8_t *field_data = nullptr;
+    uint8_t field_len = 0;
 
-        if(field_type == type) {
-            const uint8_t *buf = &adv_data[index + 2];
-            uint8_t len = field_length - 1; 
-					
-            return std::vector<uint8_t>(buf, buf + len);
-        }
-        index += field_length + 1;                    
+    if (name_len == 0) {
+        return false;
     }
-    
-    return {};
-}
 
-std::string_view get_scan_adv_name(const uint8_t adv_data[], uint8_t adv_len) {
-    std::vector<uint8_t> res = adv_data_prase(BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME, adv_data, adv_len);
-    if (res.empty()) {
-        res = adv_data_prase(BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME, adv_data, adv_len);
-        if (res.empty())
-            return {};
+    name[0] = '\0';
+    bool has_name = adv_data_field_get(BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
+                                       adv_data,
+                                       adv_len,
+                                       &field_data,
+                                       &field_len);
+    if (!has_name) {
+        has_name = adv_data_field_get(BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME,
+                                      adv_data,
+                                      adv_len,
+                                      &field_data,
+                                      &field_len);
     }
-    res.push_back('\0');
-    return {(char *)res.data(), res.size()};
+
+    if (!has_name || field_len == 0) {
+        return false;
+    }
+
+    size_t copy_len = std::min((size_t)field_len, name_len - 1);
+    memcpy(name, field_data, copy_len);
+    name[copy_len] = '\0';
+    return true;
 }
 
 int send(uint16_t char_handle, const void * data, uint16_t length) {
