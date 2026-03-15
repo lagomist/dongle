@@ -5,7 +5,13 @@
 
 namespace dongle {
 
-void ble_scan(uint16_t timeout);
+enum class ScanMode : uint8_t {
+    PHY_1M,
+    PHY_CODED,
+    PHY_DUAL,
+};
+
+void ble_scan(uint16_t timeout, ScanMode mode = ScanMode::PHY_1M);
 
 // 支持设备名和地址连接
 int ble_connect(std::string_view name, uint16_t timeout);

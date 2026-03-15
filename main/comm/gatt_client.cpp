@@ -11,6 +11,7 @@
 #include "ble_srv_common.h"
 #include "nrf_ble_scan.h"
 #include "nrf_ble_gatt.h"
+#include "ble_advdata.h"
 #include "app_scheduler.h"
 #include "app_error.h"
 #include <algorithm>
@@ -41,6 +42,9 @@ constexpr static const ble_uuid128_t GATT_BASE_UUID = {0x40, 0xE3, 0x4A, 0x1D, 0
 constexpr static const uint8_t APP_BLE_CONN_CFG_TAG = 1;
 constexpr static const uint16_t APP_BLE_SCAN_INTERVAL   = NRF_BLE_SCAN_SCAN_INTERVAL;
 constexpr static const uint16_t APP_BLE_SCAN_WINDOW     = NRF_BLE_SCAN_SCAN_WINDOW;
+constexpr static const uint8_t APP_BLE_SCAN_PHY         = BLE_GAP_PHY_1MBPS;
+constexpr static const uint16_t APP_BLE_SCAN_DUAL_INTERVAL =
+    (APP_BLE_SCAN_INTERVAL >= (APP_BLE_SCAN_WINDOW * 2)) ? APP_BLE_SCAN_INTERVAL : (APP_BLE_SCAN_WINDOW * 2);
 
 constexpr static const uint16_t APP_MIN_CONNECTION_INTERVAL     = MSEC_TO_UNITS(7.5, UNIT_1_25_MS);
 constexpr static const uint16_t APP_MAX_CONNECTION_INTERVAL     = MSEC_TO_UNITS(30, UNIT_1_25_MS);
@@ -84,13 +88,39 @@ BLE_DB_DISCOVERY_DEF(_db_disc);
 static uint16_t _gattc_max_data_len = 23;
 
 static ble_gap_scan_params_t _scan_param = {
+    .extended      = 0x01,
+    .report_incomplete_evts = 0x00,
     .active        = 0x01,
     .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,
-    .scan_phys     = BLE_GAP_PHY_1MBPS,
+    .scan_phys     = APP_BLE_SCAN_PHY,
     .interval      = APP_BLE_SCAN_INTERVAL,
     .window        = APP_BLE_SCAN_WINDOW,
     .timeout       = 1000,
 };
+
+static uint8_t scan_mode_to_phys(ScanMode mode) {
+    switch (mode) {
+    case ScanMode::PHY_CODED:
+        return BLE_GAP_PHY_CODED;
+    case ScanMode::PHY_DUAL:
+        return BLE_GAP_PHY_1MBPS | BLE_GAP_PHY_CODED;
+    case ScanMode::PHY_1M:
+    default:
+        return BLE_GAP_PHY_1MBPS;
+    }
+}
+
+static const char *scan_mode_to_str(ScanMode mode) {
+    switch (mode) {
+    case ScanMode::PHY_CODED:
+        return "coded";
+    case ScanMode::PHY_DUAL:
+        return "dual";
+    case ScanMode::PHY_1M:
+    default:
+        return "1m";
+    }
+}
 
 ble_gap_conn_params_t _conn_param = {
     .min_conn_interval = APP_MIN_CONNECTION_INTERVAL,
@@ -130,33 +160,42 @@ static bool adv_data_field_get(uint8_t type,
 }
 
 static void fill_adv_report(AdvReport *report, ble_gap_evt_adv_report_t const *p_adv) {
-    const uint8_t *field_data = nullptr;
-    uint8_t field_len = 0;
+    uint16_t field_offset = 0;
+    uint16_t field_len = 0;
 
     memset(report, 0, sizeof(*report));
     report->valid = true;
+    report->connectable = p_adv->type.connectable;
+    report->scannable = p_adv->type.scannable;
     report->scan_response = p_adv->type.scan_response;
+    report->extended_pdu = p_adv->type.extended_pdu;
+    report->anonymous = (p_adv->peer_addr.addr_type == BLE_GAP_ADDR_TYPE_ANONYMOUS);
     memcpy(report->peer_addr.addr, p_adv->peer_addr.addr, sizeof(report->peer_addr.addr));
     report->peer_addr.type = p_adv->peer_addr.addr_type;
     report->tx_power = p_adv->tx_power;
     report->rssi = p_adv->rssi;
+    report->data_status = p_adv->type.status;
+    report->primary_phy = p_adv->primary_phy;
+    report->secondary_phy = p_adv->secondary_phy;
+    report->set_id = p_adv->set_id;
 
-    bool has_name = adv_data_field_get(BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
-                                       p_adv->data.p_data,
-                                       p_adv->data.len,
-                                       &field_data,
-                                       &field_len);
+    field_len = ble_advdata_search(p_adv->data.p_data,
+                                   p_adv->data.len,
+                                   &field_offset,
+                                   BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME);
+    bool has_name = (field_len > 0);
     if (!has_name) {
-        has_name = adv_data_field_get(BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME,
-                                      p_adv->data.p_data,
-                                      p_adv->data.len,
-                                      &field_data,
-                                      &field_len);
+        field_offset = 0;
+        field_len = ble_advdata_search(p_adv->data.p_data,
+                                       p_adv->data.len,
+                                       &field_offset,
+                                       BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME);
+        has_name = (field_len > 0);
     }
 
     if (has_name && field_len > 0) {
         size_t copy_len = std::min((size_t)field_len, sizeof(report->name) - 1);
-        memcpy(report->name, field_data, copy_len);
+        memcpy(report->name, &p_adv->data.p_data[field_offset], copy_len);
         report->name[copy_len] = '\0';
         report->has_name = true;
     }
@@ -573,9 +612,23 @@ int disconnection() {
 }
 
 void scan_start(uint16_t timeout_sec) {
+    scan_start(timeout_sec, ScanMode::PHY_1M);
+}
+
+void scan_start(uint16_t timeout_sec, ScanMode mode) {
     ret_code_t err_code;
     _current_evt = EvtType::SCANTING_EVT;
+    _scan_param.scan_phys = scan_mode_to_phys(mode);
+    _scan_param.interval = (_scan_param.scan_phys == (BLE_GAP_PHY_1MBPS | BLE_GAP_PHY_CODED))
+                           ? APP_BLE_SCAN_DUAL_INTERVAL
+                           : APP_BLE_SCAN_INTERVAL;
     _scan_param.timeout = (uint16_t )(timeout_sec * 100);
+    NRF_LOG_INFO("scan start mode:%s timeout:%d sec phys:0x%02X interval:%d window:%d",
+                 scan_mode_to_str(mode),
+                 timeout_sec,
+                 _scan_param.scan_phys,
+                 _scan_param.interval,
+                 _scan_param.window);
     err_code = nrf_ble_scan_params_set(&_scan_inst, &_scan_param);
     APP_ERROR_CHECK(err_code);
     err_code = nrf_ble_scan_start(&_scan_inst);

@@ -4,6 +4,7 @@
 #include "usb_cli.h"
 #include "dongle.h"
 #include "utils.h"
+#include <cstring>
 
 namespace cmds {
 
@@ -54,9 +55,31 @@ static void cmd_ble(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_ble_scan(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    uint16_t timeout = (argc == 2) ? atoi(argv[1]) : 5;
-    dongle::ble_scan(timeout);
-    nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "start scan %d sec\n", timeout);
+	uint16_t timeout = 15;
+	dongle::ScanMode mode = dongle::ScanMode::PHY_1M;
+	if (argc >= 2) {
+		if (strcmp(argv[1], "coded") == 0) {
+			mode = dongle::ScanMode::PHY_CODED;
+		} else if (strcmp(argv[1], "dual") == 0) {
+			mode = dongle::ScanMode::PHY_DUAL;
+		} else if (strcmp(argv[1], "1m") == 0) {
+			mode = dongle::ScanMode::PHY_1M;
+		} else {
+			timeout = atoi(argv[1]);
+		}
+	}
+	if (argc >= 3) {
+		if (strcmp(argv[2], "coded") == 0) {
+			mode = dongle::ScanMode::PHY_CODED;
+		} else if (strcmp(argv[2], "dual") == 0) {
+			mode = dongle::ScanMode::PHY_DUAL;
+		} else if (strcmp(argv[2], "1m") != 0) {
+			nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "scan mode must be 1m/coded/dual\n");
+			return;
+		}
+	}
+	dongle::ble_scan(timeout, mode);
+	nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "start scan %d sec\n", timeout);
 }
 
 static void cmd_ble_connect(nrf_cli_t const * p_cli, size_t argc, char **argv) {

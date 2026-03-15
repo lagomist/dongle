@@ -11,6 +11,12 @@ namespace BLE {
 
 namespace Client {
 
+enum class ScanMode : uint8_t {
+    PHY_1M,
+    PHY_CODED,
+    PHY_DUAL,
+};
+
 enum class EvtType : uint8_t {
     IDLE,
     SCANTING_EVT,
@@ -50,9 +56,17 @@ struct AdvReport {
     } peer_addr;
     bool valid;
     bool has_name;
+    bool connectable;
+    bool scannable;
     bool scan_response;
+    bool extended_pdu;
+    bool anonymous;
     int8_t tx_power;
     int8_t rssi;
+    uint8_t data_status;
+    uint8_t primary_phy;
+    uint8_t secondary_phy;
+    uint8_t set_id;
 };
 
 struct CharHandle {
@@ -105,7 +119,7 @@ int register_conn_handle(uint16_t conn_handle);
 int notif_config(uint16_t cccd_handle, bool notification_enable);
 int notif_enable();
 int mtu_request(uint16_t mtu);
-void scan_start(uint16_t timeout_sec = 0);
+void scan_start(uint16_t timeout_sec = 0, ScanMode mode = ScanMode::PHY_1M);
 int connection(AdvReport::PeerAddress const &peer_addr, uint16_t timeout_sec);
 int disconnection();
 
