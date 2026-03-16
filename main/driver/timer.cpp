@@ -12,14 +12,13 @@ NRF_LOG_MODULE_REGISTER();
 
 namespace Wrapper {
 
-namespace AppTimer {
-
 struct SliceInstance {
     Action action;
     void *param;
     int count;
     uint32_t period;
     volatile uint32_t tick;
+    uint32_t event;
     uint8_t active;
 };
 
@@ -271,12 +270,23 @@ uint32_t Timer::getRemainingTime() {
     return handle->content.tick * TICK_PERIOD_MS;
 }
 
+
+void EventHandler::notify(void *param, uint32_t period) {
+    if (_handle == nullptr) return;
+    InstanceList *handle = (InstanceList *)_handle;
+    handle->content.param = param;
+    handle->content.count = _cycle_count;
+    handle->content.active = 1;
+    handle->content.period = period;
+    handle->content.tick = 0;
+}
+
 uint32_t getTick() {
     return _timer_tick;
 }
 
 
-void init(void) {
+void timerInit(void) {
 	/* use the RTC timer */
     ret_code_t err_code = nrf_drv_clock_init();
     APP_ERROR_CHECK(err_code);
@@ -299,5 +309,4 @@ void init(void) {
     NRF_LOG_INFO("init success.");
 }
 
-}
 }

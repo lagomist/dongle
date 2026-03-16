@@ -77,8 +77,8 @@ enum DBEvent : uint8_t {
 static gattc_profile _profile;
 static GattDatabase _database;
 static EvtType _current_evt;
-static Wrapper::AppTimer::Timer _timer_handle;
-static Wrapper::AppTimer::Task _task_handle;
+static Wrapper::EventHandler _event_handle;
+static Wrapper::Task _task_handle;
 static DBEvent _db_event;
 NRF_BLE_GATT_DEF(_gatt_inst);
 NRF_BLE_GQ_DEF(_ble_gatt_queue, NRF_SDH_BLE_CENTRAL_LINK_COUNT, NRF_BLE_GQ_QUEUE_SIZE);
@@ -210,8 +210,9 @@ static void app_scheduler_process(void *arg) {
     app_sched_execute();
 }
 
-static void database_task(void *arg) {
-    switch (_db_event) {
+static void database_handler(void *arg) {
+    DBEvent evt = static_cast<DBEvent>(reinterpret_cast<uintptr_t>(arg));
+    switch (evt) {
     case DBEvent::MTU_EXCHANGE: {
         
         break;
@@ -307,7 +308,7 @@ static void on_primary_srv_discovery_rsp(ble_gattc_evt_prim_srvc_disc_rsp_t cons
         }
     }
     _db_event = DBEvent::PRIMARY_SRV_RSP;
-    _timer_handle.restart();
+    _event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(_db_event)));
 }
 
 static void on_characteristic_discovery_rsp(ble_gattc_evt_char_disc_rsp_t const * p_chars) {
@@ -330,7 +331,7 @@ static void on_characteristic_discovery_rsp(ble_gattc_evt_char_disc_rsp_t const 
     }
     
     _db_event = DBEvent::CHAR_DISC_RSP;
-    _timer_handle.restart();
+    _event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(_db_event)));
 }
 
 static void on_descriptor_discovery_rsp(ble_gattc_evt_desc_disc_rsp_t const *p_descs) {
@@ -353,7 +354,7 @@ static void on_descriptor_discovery_rsp(ble_gattc_evt_desc_disc_rsp_t const *p_d
     }
     
     _db_event = DBEvent::DESC_DISC_RSP;
-    _timer_handle.restart();
+    _event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(_db_event)));
 }
 
 static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
@@ -372,7 +373,7 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
 
             // 启动所有服务发现
             _db_event = DBEvent::SERVICE_DISCOVER;
-            _timer_handle.restart();
+            _event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(_db_event)));
 
             _current_evt = EvtType::CONNECTED_EVT;
             if (_profile.evt_handler != nullptr)
@@ -791,8 +792,8 @@ int init() {
     err_code = sd_ble_uuid_vs_add(&GATT_BASE_UUID, &_profile.uuid_type);
     APP_ERROR_CHECK(err_code);
     ble_scan_init();
-    _timer_handle.create(database_task, Wrapper::AppTimer::CALL_IMMEDIATE, &_db_event);
-    _task_handle.create(app_scheduler_process, Wrapper::AppTimer::CALL_IMMEDIATE);
+    _event_handle.create(database_handler);
+    _task_handle.create(app_scheduler_process, Wrapper::CALL_IMMEDIATE);
     NRF_LOG_INFO("init success.");
     return err_code;
 }

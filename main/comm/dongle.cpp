@@ -3,6 +3,7 @@
 #include "usb_cli.h"
 #include "timer.h"
 #include "nrf_delay.h"
+#include <cstdint>
 #include <cstring>
 
 #define NRF_LOG_MODULE_NAME Dongle
@@ -23,8 +24,7 @@ struct ScanStats {
 	uint32_t dropped_unique_devices;
 };
 
-static Wrapper::AppTimer::Timer _timer_handle;
-static Wrapper::BLE::Client::EvtType _status;
+static Wrapper::EventHandler _event_handle;
 static Wrapper::BLE::Client::AdvReport _scan_dev_list[SCAN_MAX_BUF_NUM];
 static Wrapper::BLE::Client::AdvReport _target_device;
 static Wrapper::BLE::Client::CharHandle _char_handle;
@@ -115,8 +115,8 @@ static int database_find_chars(uint16_t char_uuid, Wrapper::BLE::Client::CharHan
 }
 
 static void ble_evt_callback(Wrapper::BLE::Client::EvtType evt, uint16_t handle) {
-	_status = evt;
-	_timer_handle.restart();
+	(void)handle;
+	_event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(evt)));
 }
 
 static void scan_callback(Wrapper::BLE::Client::AdvReport report) {
@@ -157,8 +157,8 @@ static void scan_callback(Wrapper::BLE::Client::AdvReport report) {
 
 static void db_callback(Wrapper::BLE::Client::GattDatabase* database) {
 	_database = database;
-	_status = Wrapper::BLE::Client::EvtType::SERVICE_DISCOVER_EVT;
-	_timer_handle.restart();
+	Wrapper::BLE::Client::EvtType evt = Wrapper::BLE::Client::EvtType::SERVICE_DISCOVER_EVT;
+	_event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(evt)));
 }
 
 static void ble_recv_callback(uint16_t handle, const uint8_t *data, uint16_t len) {
@@ -167,9 +167,10 @@ static void ble_recv_callback(uint16_t handle, const uint8_t *data, uint16_t len
 	usb_cli::write("Ble receive len: %d, data:\n%s\n", len, _rx_buffer);
 }
 
-static void dongle_task(void *arg) {
-	usb_cli::option_printf("\nBle %s\n", Wrapper::BLE::Client::evt_to_str(_status).data());
-	switch (_status) {
+static void dongle_handler(void *param) {
+	Wrapper::BLE::Client::EvtType evt = static_cast<Wrapper::BLE::Client::EvtType>(reinterpret_cast<uintptr_t>(param));
+	usb_cli::option_printf("\nBle %s\n", Wrapper::BLE::Client::evt_to_str(evt).data());
+	switch (evt) {
 	case Wrapper::BLE::Client::EvtType::SCAN_TIMEOUT_EVT:
 		usb_cli::write("Scan summary: mode=%s, reports=%lu, unique=%lu, scan_rsp=%lu, ext=%lu, anon=%lu, dropped=%lu, dropped_unique=%lu, capacity=%u\n",
 						scan_mode_name(_scan_mode),
@@ -219,7 +220,6 @@ static void dongle_task(void *arg) {
 }
 
 void ble_scan(uint16_t timeout, ScanMode mode) {
-	_status = Wrapper::BLE::Client::EvtType::IDLE;
 	_scan_mode = mode;
 	memset(_scan_dev_list, 0, sizeof(_scan_dev_list));
 	memset(&_scan_stats, 0, sizeof(_scan_stats));
@@ -295,7 +295,7 @@ int init() {
 	Wrapper::BLE::Client::register_db_callback(db_callback);
 	Wrapper::BLE::Client::register_recv_callback(ble_recv_callback);
 	usb_cli::enable();
-	_timer_handle.create(dongle_task, Wrapper::AppTimer::CALL_IMMEDIATE);
+	_event_handle.create(dongle_handler);
 	return 0;
 }
 

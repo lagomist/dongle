@@ -24,7 +24,7 @@ namespace usb_cli {
 
 constexpr static uint8_t const CLI_LOG_QUEUE_SIZE = 5;
 
-static Wrapper::AppTimer::Task _task_handle;
+static Wrapper::Task _task_handle;
 static bool _usb_connected = false;
 static bool _cli_started = false;
 static bool _usb_log_requested = false;
@@ -161,7 +161,7 @@ int init(void) {
     APP_ERROR_CHECK(ret);
 	usb_log_backend_register();
 
-	_task_handle.create(process, Wrapper::AppTimer::CALL_IMMEDIATE, &_usb_cdc_cli);
+	_task_handle.create(process, Wrapper::CALL_IMMEDIATE, &_usb_cdc_cli);
 	_task_handle.suspend();
 	
 	NRF_LOG_INFO("init success.");

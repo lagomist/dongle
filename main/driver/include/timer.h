@@ -5,8 +5,6 @@
 
 namespace Wrapper {
 
-namespace AppTimer {
-
 constexpr uint32_t const TICK_PERIOD_MS	= 1;
 constexpr int const LOOP_FOREVER 		= -1;
 constexpr int const CALL_IMMEDIATE		= 0;
@@ -50,15 +48,25 @@ public:
 	void setCycleCount(uint32_t count);
 	bool isRuning();
 	uint32_t getRemainingTime();
-private:
+	
+protected:
 	void * _handle = nullptr;
 	uint32_t _cycle_count;
 };
 
+class EventHandler : private Timer {
+public:
+	EventHandler() : Timer() {}
+	EventHandler(Action cb) : Timer(cb, 0, nullptr, 1) {}
+
+	int create(Action cb) { return Timer::create(cb, 0, nullptr, 1); }
+
+	void notify(void *param, uint32_t period = 0);
+};
+
 uint32_t getTick();
 void sliceProcess();
-void init();
+void timerInit();
 
-}
 
 }

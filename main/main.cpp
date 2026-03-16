@@ -9,7 +9,7 @@
 #include "nrf_log_default_backends.h"
 
 static void poweron_init(void) {
-	ret_code_t err_code = NRF_LOG_INIT(Wrapper::AppTimer::getTick);
+	ret_code_t err_code = NRF_LOG_INIT(Wrapper::getTick);
     APP_ERROR_CHECK(err_code);
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 
@@ -21,7 +21,7 @@ static void poweron_init(void) {
 extern "C" int main(void) {
 	poweron_init();
 
-	Wrapper::AppTimer::init();
+	Wrapper::timerInit();
 	usb_cli::init();
 	Wrapper::BLE::Client::init();
 
@@ -30,7 +30,7 @@ extern "C" int main(void) {
 
 	NRF_LOG_INFO("enter slice processing ...");
 	while(true)	{
-		Wrapper::AppTimer::sliceProcess();
+		Wrapper::sliceProcess();
 	}
 }
 

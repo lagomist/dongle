@@ -50,9 +50,9 @@ Related files:
 ### 3. Event-driven lightweight framework
 The firmware uses a small internal slice-based timer/task framework instead of a full RTOS.
 
-- `Wrapper::AppTimer::Task` is used for periodic tasks
-- `Wrapper::AppTimer::Timer` is used for delayed / one-shot event handling
-- the main loop continuously calls `Wrapper::AppTimer::sliceProcess()`
+- `Wrapper::Task` is used for periodic tasks
+- `Wrapper::Timer` is used for delayed / one-shot event handling
+- the main loop continuously calls `Wrapper::sliceProcess()`
 
 This keeps the firmware structure simple and deterministic for small dongle utilities.
 

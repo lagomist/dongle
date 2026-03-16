@@ -42,7 +42,7 @@ void init(void) {
 	_led->start(_led_duty);
 	
 	// set timer callback task
-	Wrapper::AppTimer::Task(sys_state_task, LED_INTERVAL_TIME_MS);
+	Wrapper::Task(sys_state_task, LED_INTERVAL_TIME_MS);
 }
 
 }
