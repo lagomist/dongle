@@ -157,7 +157,7 @@
  
 
 #ifndef NRF_BLE_GATT_MTU_EXCHANGE_INITIATION_ENABLED
-#define NRF_BLE_GATT_MTU_EXCHANGE_INITIATION_ENABLED 0
+#define NRF_BLE_GATT_MTU_EXCHANGE_INITIATION_ENABLED 1
 #endif
 
 // </e>
@@ -234,7 +234,7 @@
 
 // <o> NRF_BLE_SCAN_SCAN_WINDOW - Scanning window. Determines the scanning window in units of 0.625 millisecond. 
 #ifndef NRF_BLE_SCAN_SCAN_WINDOW
-#define NRF_BLE_SCAN_SCAN_WINDOW 160
+#define NRF_BLE_SCAN_SCAN_WINDOW 320
 #endif
 
 // <o> NRF_BLE_SCAN_MIN_CONNECTION_INTERVAL - Determines minimum connection interval in milliseconds. 
@@ -306,7 +306,7 @@
 // <e> PEER_MANAGER_ENABLED - peer_manager - Peer Manager
 //==========================================================
 #ifndef PEER_MANAGER_ENABLED
-#define PEER_MANAGER_ENABLED 0
+#define PEER_MANAGER_ENABLED 1
 #endif
 // <o> PM_MAX_REGISTRANTS - Number of event handlers that can be registered. 
 #ifndef PM_MAX_REGISTRANTS

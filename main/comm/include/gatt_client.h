@@ -46,6 +46,28 @@ constexpr std::string_view evt_to_str(EvtType evt) {
     return "unknown";
 }
 
+constexpr const char *scan_mode_name(ScanMode mode) {
+	switch (mode) {
+	case ScanMode::PHY_CODED:       return "coded";
+	case ScanMode::PHY_DUAL:		return "dual";
+	case ScanMode::PHY_1M:		    return "1m";
+	default: return "Unknown";
+	}
+}
+
+constexpr const char* reason_to_text(uint8_t code) {
+    switch (code) {
+        case 0x13: return "Remote User Terminated Connection";
+        case 0x16: return "Connection Timeout";
+        case 0x3B: return "Connection Terminated by Local Host";
+        case 0x08: return "Connection Timeout (Supervision Timeout Exceeded)";
+        case 0x22: return "MIC Failure";
+        case 0x05: return "Authentication Failure";
+        case 0x15: return "Remote Device Terminated Connection due to Low Resources";
+        default: return "Other/Unknown Reason";
+    }
+}
+
 struct AdvReport {
     char name[32];
     struct PeerAddress {
@@ -100,7 +122,7 @@ struct GattDatabase {
     uint16_t conn_handle;        // 连接句柄
 };
 
-using EvtCallback = void (*)(EvtType evt, uint16_t handle);
+using EvtCallback = void (*)(EvtType evt, uint16_t params);
 using ScanCallback = void (*)(AdvReport report);
 using RecvCallback = void (*)(uint16_t handle, const uint8_t *data, uint16_t len);
 using DbDisCallback = void (*)(GattDatabase* database);

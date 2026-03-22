@@ -79,11 +79,15 @@ static void cmd_ble_scan(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 		}
 	}
 	dongle::ble_scan(timeout, mode);
-	nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "start scan %d sec\n", timeout);
+	nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "start scan: %d sec, mode: %s\n", timeout, Wrapper::BLE::Client::scan_mode_name(mode));
 }
 
 static void cmd_ble_connect(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    CMD_ASSERT(argc >= 2);
+    if ((argc < 2) || nrf_cli_help_requested(p_cli)) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Usage: ble connect <name|AA:BB:CC:DD:EE:FF> [timeout]\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Connect to device by name or MAC.\n");
+        return;
+    }
     std::string name(argv[1]);
     uint16_t timeout = (argc == 3) ? atoi(argv[2]) : 5;
     int res = dongle::ble_connect(name, timeout);
@@ -95,7 +99,11 @@ static void cmd_ble_connect(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_ble_select(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    CMD_ASSERT(argc == 2);
+    if ((argc != 2) || nrf_cli_help_requested(p_cli)) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Usage: ble select <uuid_hex>\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Select characteristic by 16-bit UUID.\n");
+        return;
+    }
     uint16_t char_uuid = strtoul(argv[1], nullptr, 16);
     if (dongle::ble_select(char_uuid) < 0) {
         nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "UUID not found.\n");
@@ -105,7 +113,11 @@ static void cmd_ble_select(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_ble_send(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    CMD_ASSERT(argc >= 2);
+    if ((argc < 2) || nrf_cli_help_requested(p_cli)) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Usage: ble send <payload>\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Send data string to connected device.\n");
+        return;
+    }
     Utils::OBuf content = argv[1];
     for (size_t i = 1; i < argc - 1; i++) {
         content += ' ';
@@ -160,19 +172,19 @@ static void cmd_usb_log(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
 NRF_CLI_CMD_REGISTER(nordic, nullptr, "Print Nordic Semiconductor logo.", cmd_nordic);
 NRF_CLI_CPP_CREATE_STATIC_SUBCMD_SET(m_sub_ble,
-    NRF_CLI_CMD(scan,   nullptr, "Scan ble device.", cmd_ble_scan),
-    NRF_CLI_CMD(connect,   nullptr, "Connect ble device.", cmd_ble_connect),
-    NRF_CLI_CMD(select,   nullptr, "Select ble a service.", cmd_ble_select),
-    NRF_CLI_CMD(send,   nullptr, "Send a string data.", cmd_ble_send),
-    NRF_CLI_CMD(disconnect,   nullptr, "Disconnect ble device.", cmd_ble_disconnect),
+    NRF_CLI_CMD(scan, nullptr, "Scan for BLE devices. Usage: ble scan [timeout] [1m|coded|dual]", cmd_ble_scan),
+    NRF_CLI_CMD(connect, nullptr, "Connect to a BLE device by name or MAC. Usage: ble connect <name|AA:BB:CC:DD:EE:FF> [timeout]", cmd_ble_connect),
+    NRF_CLI_CMD(select, nullptr, "Select service by 16-bit UUID. Usage: ble select <uuid_hex>", cmd_ble_select),
+    NRF_CLI_CMD(send, nullptr, "Send string data to BLE. Usage: ble send <payload>", cmd_ble_send),
+    NRF_CLI_CMD(disconnect, nullptr, "Disconnect current BLE device. Usage: ble disconnect", cmd_ble_disconnect),
     NRF_CLI_SUBCMD_SET_END
 );
-NRF_CLI_CMD_REGISTER(ble, &m_sub_ble, "ble host interface", cmd_ble);
+NRF_CLI_CMD_REGISTER(ble, &m_sub_ble, "BLE host interface. Use 'ble scan', 'ble connect', ...", cmd_ble);
 
 NRF_CLI_CPP_CREATE_STATIC_SUBCMD_SET(m_sub_usb,
     NRF_CLI_CMD(log, nullptr, "Control USB log output.", cmd_usb_log),
     NRF_CLI_SUBCMD_SET_END
 );
-NRF_CLI_CMD_REGISTER(usb, &m_sub_usb, "usb interface", cmd_usb);
+NRF_CLI_CMD_REGISTER(usb, &m_sub_usb, "USB interface. Use 'usb log on|off|status'", cmd_usb);
 
 }

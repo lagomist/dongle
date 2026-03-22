@@ -384,8 +384,10 @@ static void ble_gap_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
             NRF_LOG_DEBUG("Ble disconnected. reason: 0x%x", p_gap_evt->params.disconnected.reason);
             _profile.conn_handle = BLE_CONN_HANDLE_INVALID;
             _current_evt = EvtType::DISCONNECTED_EVT;
-            if (_profile.evt_handler != nullptr)
-                _profile.evt_handler(EvtType::DISCONNECTED_EVT, BLE_CONN_HANDLE_INVALID);
+            if (_profile.evt_handler != nullptr) {
+                uint16_t reason = p_gap_evt->params.disconnected.reason;
+                _profile.evt_handler(EvtType::DISCONNECTED_EVT, reason);
+            }
             break;
 
         case BLE_GAP_EVT_TIMEOUT:

@@ -32,30 +32,8 @@ static Wrapper::BLE::Client::GattDatabase* _database = nullptr;
 static char _rx_buffer[520];
 static ScanStats _scan_stats;
 static ScanMode _scan_mode = ScanMode::PHY_1M;
+static uint8_t _disconnect_reason = 0;
 
-static Wrapper::BLE::Client::ScanMode to_client_scan_mode(ScanMode mode) {
-	switch (mode) {
-	case ScanMode::PHY_CODED:
-		return Wrapper::BLE::Client::ScanMode::PHY_CODED;
-	case ScanMode::PHY_DUAL:
-		return Wrapper::BLE::Client::ScanMode::PHY_DUAL;
-	case ScanMode::PHY_1M:
-	default:
-		return Wrapper::BLE::Client::ScanMode::PHY_1M;
-	}
-}
-
-static const char *scan_mode_name(ScanMode mode) {
-	switch (mode) {
-	case ScanMode::PHY_CODED:
-		return "coded";
-	case ScanMode::PHY_DUAL:
-		return "dual";
-	case ScanMode::PHY_1M:
-	default:
-		return "1m";
-	}
-}
 
 static const char *device_name(Wrapper::BLE::Client::AdvReport const &report) {
 	return report.has_name ? report.name : "Unknown";
@@ -65,10 +43,6 @@ static bool peer_addr_equal(Wrapper::BLE::Client::AdvReport::PeerAddress const &
 					 Wrapper::BLE::Client::AdvReport::PeerAddress const &rhs) {
 	return (lhs.type == rhs.type) &&
 			(std::memcmp(lhs.addr, rhs.addr, sizeof(lhs.addr)) == 0);
-}
-
-static bool can_connect(Wrapper::BLE::Client::AdvReport const &report) {
-	return report.valid && report.connectable && !report.scan_response;
 }
 
 static int scan_list_find_by_addr(Wrapper::BLE::Client::AdvReport::PeerAddress const &peer_addr) {
@@ -114,8 +88,10 @@ static int database_find_chars(uint16_t char_uuid, Wrapper::BLE::Client::CharHan
 	return -2;
 }
 
-static void ble_evt_callback(Wrapper::BLE::Client::EvtType evt, uint16_t handle) {
-	(void)handle;
+static void ble_evt_callback(Wrapper::BLE::Client::EvtType evt, uint16_t params) {
+	if (evt == Wrapper::BLE::Client::EvtType::DISCONNECTED_EVT) {
+		_disconnect_reason = params;
+	}
 	_event_handle.notify(reinterpret_cast<void*>(static_cast<uintptr_t>(evt)));
 }
 
@@ -182,19 +158,18 @@ static void dongle_handler(void *param) {
 						(unsigned long)_scan_stats.dropped_reports,
 						(unsigned long)_scan_stats.dropped_unique_devices,
 						SCAN_MAX_BUF_NUM);
-		usb_cli::write("%-32s %-17s  %-4s %-4s %-3s %-4s %s\n", "Name", "Addr", "Pri", "Sec", "Ext", "Conn", "Rssi");
+		usb_cli::write("%-32s %-17s  %-4s %-4s %-3s %s\n", "Name", "Addr", "Pri", "Sec", "Ext", "Rssi");
 		for (int i = 0; i < SCAN_MAX_BUF_NUM; i++) {
-			if (!_scan_dev_list[i].valid) {
+			if (!_scan_dev_list[i].valid || !_scan_dev_list[i].has_name) {
 				continue;
 			}
-			usb_cli::write("%-32s %02X:%02X:%02X:%02X:%02X:%02X  %-4u %-4u %-3s %-4s %d\n",
+			usb_cli::write("%-32s %02X:%02X:%02X:%02X:%02X:%02X  %-4u %-4u %-3s %d\n",
 							device_name(_scan_dev_list[i]),
 							_scan_dev_list[i].peer_addr.addr[5], _scan_dev_list[i].peer_addr.addr[4], _scan_dev_list[i].peer_addr.addr[3],
 							_scan_dev_list[i].peer_addr.addr[2], _scan_dev_list[i].peer_addr.addr[1], _scan_dev_list[i].peer_addr.addr[0],
 							_scan_dev_list[i].primary_phy,
 							_scan_dev_list[i].secondary_phy,
 							_scan_dev_list[i].extended_pdu ? "yes" : "no",
-							can_connect(_scan_dev_list[i]) ? "yes" : "no",
 							_scan_dev_list[i].rssi);
 		}
 		break;
@@ -214,16 +189,19 @@ static void dongle_handler(void *param) {
 			}
 		}
 		break;
-	default:
-		break;
-	}
+    case Wrapper::BLE::Client::EvtType::DISCONNECTED_EVT:
+        usb_cli::write("Disconnected. Reason: 0x%02X (%s)\n", _disconnect_reason, Wrapper::BLE::Client::reason_to_text(_disconnect_reason));
+        break;
+    default:
+        break;
+    }
 }
 
 void ble_scan(uint16_t timeout, ScanMode mode) {
 	_scan_mode = mode;
 	memset(_scan_dev_list, 0, sizeof(_scan_dev_list));
 	memset(&_scan_stats, 0, sizeof(_scan_stats));
-	Wrapper::BLE::Client::scan_start(timeout, to_client_scan_mode(mode));
+	Wrapper::BLE::Client::scan_start(timeout, mode);
 }
 
 int ble_connect(std::string_view name, uint16_t timeout) {
@@ -259,13 +237,6 @@ int ble_connect(std::string_view name, uint16_t timeout) {
 
 	if (!find) {
 		return -1;
-	}
-	if (!can_connect(_target_device)) {
-		NRF_LOG_WARNING("Target advertising is not connectable. addr_type:%d ext:%d scan_rsp:%d",
-						_target_device.peer_addr.type,
-						_target_device.extended_pdu,
-						_target_device.scan_response);
-		return NRF_ERROR_INVALID_STATE;
 	}
 	return Wrapper::BLE::Client::connection(_target_device.peer_addr, timeout);
 }

@@ -1,15 +1,12 @@
 #pragma once
 
+#include "gatt_client.h"
 #include <cstdint>
 #include <string_view>
 
 namespace dongle {
 
-enum class ScanMode : uint8_t {
-    PHY_1M,
-    PHY_CODED,
-    PHY_DUAL,
-};
+using ScanMode = Wrapper::BLE::Client::ScanMode;
 
 void ble_scan(uint16_t timeout, ScanMode mode = ScanMode::PHY_1M);
 
